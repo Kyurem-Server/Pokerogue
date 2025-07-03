@@ -82,6 +82,7 @@ export class TitlePhase extends Phase {
               return true;
             },
           });
+          /*
           options.push({
             label: i18next.t("menu:dailyRun"),
             handler: () => {
@@ -89,6 +90,16 @@ export class TitlePhase extends Phase {
               return true;
             },
           });
+          */
+          // Customs
+          options.push({
+            label: GameMode.getModeName(GameModes.SPLICED_CLASSIC),
+            handler: () => {
+              setModeAndEnd(GameModes.SPLICED_CLASSIC);
+              return true;
+            },
+          });
+          // End Customs
           if (gameData.isUnlocked(Unlockables.ENDLESS_MODE)) {
             options.push({
               label: GameMode.getModeName(GameModes.CHALLENGE),
