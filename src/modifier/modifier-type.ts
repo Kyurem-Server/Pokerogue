@@ -2625,6 +2625,15 @@ export function getPlayerShopModifierTypeOptionsForWave(waveIndex: number, baseC
 
   const options = [
     [
+      new ModifierTypeOption(
+        (() => {
+          const modifier = modifierTypeInitObj.DNA_SPLICERS();
+          modifier.setTier(ModifierTier.MASTER);
+          return modifier;
+        })(),
+        0,
+        0,
+      ),
       new ModifierTypeOption(modifierTypeInitObj.POTION(), 0, baseCost * 0.2),
       new ModifierTypeOption(modifierTypeInitObj.ETHER(), 0, baseCost * 0.4),
       new ModifierTypeOption(modifierTypeInitObj.REVIVE(), 0, baseCost * 2),

@@ -173,7 +173,7 @@ export class SelectModifierPhase extends BattlePhase {
   ): boolean {
     if (modifierType instanceof PokemonModifierType) {
       if (modifierType instanceof FusePokemonModifierType) {
-        this.openFusionMenu(modifierType, cost, modifierSelectCallback);
+        this.openFusionMenu(modifierType, -1, modifierSelectCallback);
       } else {
         this.openModifierMenu(modifierType, cost, modifierSelectCallback);
       }
@@ -273,6 +273,13 @@ export class SelectModifierPhase extends BattlePhase {
     // they are returned to a shop in the same state.
     if (modifier.type instanceof RememberMoveModifierType || modifier.type instanceof TmModifierType) {
       globalScene.phaseManager.unshiftPhase(this.copy());
+    }
+
+    if (modifier.type instanceof FusePokemonModifierType) {
+      if (result) {
+        globalScene.playSound("se/buy");
+        globalScene.phaseManager.appendToPhase(this.copy(), "LearnMovePhase");
+      }
     }
 
     if (cost !== -1 && !(modifier.type instanceof RememberMoveModifierType)) {

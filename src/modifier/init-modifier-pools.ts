@@ -16,7 +16,6 @@ import { PokeballType } from "#enums/pokeball";
 import { BerryModifier } from "./modifier";
 import { BerryType } from "#enums/berry-type";
 import { SpeciesId } from "#enums/species-id";
-import { timedEventManager } from "#app/global-event-manager";
 import { pokemonEvolutions } from "#app/data/balance/pokemon-evolutions";
 import { Unlockables } from "#enums/unlockables";
 import { isNullOrUndefined } from "#app/utils/common";
@@ -309,21 +308,6 @@ function initGreatModifierPool() {
       ).length > 0
         ? 1
         : 0,
-    ),
-    new WeightedModifierType(
-      modifierTypes.DNA_SPLICERS,
-      (party: Pokemon[]) => {
-        if (party.filter(p => !p.fusionSpecies).length > 1) {
-          if (globalScene.gameMode.isSplicedOnly) {
-            return 4;
-          }
-          if (globalScene.gameMode.isClassic && timedEventManager.areFusionsBoosted()) {
-            return 2;
-          }
-        }
-        return 0;
-      },
-      4,
     ),
     new WeightedModifierType(
       modifierTypes.VOUCHER,
@@ -623,16 +607,6 @@ function initMasterModifierPool() {
           ? Math.max(5 - rerollCount * 2, 0)
           : 0,
       5,
-    ),
-    new WeightedModifierType(
-      modifierTypes.DNA_SPLICERS,
-      (party: Pokemon[]) =>
-        !(globalScene.gameMode.isClassic && timedEventManager.areFusionsBoosted()) &&
-        !globalScene.gameMode.isSplicedOnly &&
-        party.filter(p => !p.fusionSpecies).length > 1
-          ? 24
-          : 0,
-      24,
     ),
     new WeightedModifierType(
       modifierTypes.MINI_BLACK_HOLE,
