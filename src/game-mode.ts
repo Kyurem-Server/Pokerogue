@@ -5,7 +5,7 @@ import type { Challenge } from "./data/challenge";
 import { allChallenges, applyChallenges, copyChallenge } from "./data/challenge";
 import { ChallengeType } from "#enums/challenge-type";
 import type PokemonSpecies from "./data/pokemon-species";
-import { allSpecies } from "#app/data/data-lists";
+import { allSpecies, modifierTypes } from "#app/data/data-lists";
 import type { Arena } from "./field/arena";
 import Overrides from "#app/overrides";
 import { isNullOrUndefined, randSeedInt, randSeedItem } from "#app/utils/common";
@@ -16,6 +16,20 @@ import { globalScene } from "#app/global-scene";
 import { getDailyStartingBiome } from "./data/daily-run";
 import { CLASSIC_MODE_MYSTERY_ENCOUNTER_WAVES, CHALLENGE_MODE_MYSTERY_ENCOUNTER_WAVES } from "./constants";
 import { GameModes } from "#enums/game-modes";
+import { BattleType } from "#enums/battle-type";
+// Custom
+import Trainer from "./field/trainer";
+import { getRandomPartyMemberFunc, trainerConfigs } from "./data/trainers/trainer-config";
+import { TrainerPartyTemplate } from "./data/trainers/TrainerPartyTemplate";
+import { TrainerType } from "#enums/trainer-type";
+import { TrainerVariant } from "#enums/trainer-variant";
+import { TrainerSlot } from "#enums/trainer-slot";
+import { PlayerGender } from "#enums/player-gender";
+import { PokeballType } from "#enums/pokeball";
+import { MoveId } from "#enums/move-id";
+import { PartyMemberStrength } from "#enums/party-member-strength";
+import { Gender } from "./data/gender";
+import { PokemonMove } from "./data/moves/pokemon-move";
 
 interface GameModeConfig {
   isClassic?: boolean;
@@ -234,6 +248,7 @@ export class GameMode implements GameModeConfig {
     switch (modeId) {
       case GameModes.CLASSIC:
       case GameModes.CHALLENGE:
+      case GameModes.SPLICED_CLASSIC:
         return waveIndex === 200;
       case GameModes.ENDLESS:
       case GameModes.SPLICED_ENDLESS:
@@ -255,6 +270,9 @@ export class GameMode implements GameModeConfig {
    * @returns `true` if the current battle is against classic mode's final boss
    */
   isBattleClassicFinalBoss(waveIndex: number): boolean {
+    if (this.modeId === GameModes.SPLICED_CLASSIC) {
+      return this.isWaveFinal(waveIndex);
+    }
     return (this.modeId === GameModes.CLASSIC || this.modeId === GameModes.CHALLENGE) && this.isWaveFinal(waveIndex);
   }
 
@@ -315,6 +333,7 @@ export class GameMode implements GameModeConfig {
     switch (this.modeId) {
       case GameModes.CLASSIC:
       case GameModes.CHALLENGE:
+      case GameModes.SPLICED_CLASSIC:
         return 5000;
       case GameModes.DAILY:
         return 2500;
@@ -327,6 +346,7 @@ export class GameMode implements GameModeConfig {
     switch (this.modeId) {
       case GameModes.CLASSIC:
       case GameModes.CHALLENGE:
+      case GameModes.SPLICED_CLASSIC:
       case GameModes.DAILY:
         return !isBoss ? 18 : 6;
       case GameModes.ENDLESS:
@@ -347,6 +367,9 @@ export class GameMode implements GameModeConfig {
         return i18next.t("gameMode:dailyRun");
       case GameModes.CHALLENGE:
         return i18next.t("gameMode:challenge");
+      // Customs
+      case GameModes.SPLICED_CLASSIC:
+        return i18next.t("gameMode:unknown");
     }
   }
 
@@ -356,6 +379,7 @@ export class GameMode implements GameModeConfig {
   getMysteryEncounterLegalWaves(): [number, number] {
     switch (this.modeId) {
       case GameModes.CLASSIC:
+      case GameModes.SPLICED_CLASSIC:
         return CLASSIC_MODE_MYSTERY_ENCOUNTER_WAVES;
       case GameModes.CHALLENGE:
         return CHALLENGE_MODE_MYSTERY_ENCOUNTER_WAVES;
@@ -376,6 +400,9 @@ export class GameMode implements GameModeConfig {
         return i18next.t("gameMode:dailyRun");
       case GameModes.CHALLENGE:
         return i18next.t("gameMode:challenge");
+      // Customs
+      case GameModes.SPLICED_CLASSIC:
+        return i18next.t("gameMode:unknown");
     }
   }
 }
@@ -417,6 +444,67 @@ export function getGameMode(gameMode: GameModes): GameMode {
           hasMysteryEncounters: true,
         },
         classicFixedBattles,
+      );
+    // Customs
+    case GameModes.SPLICED_CLASSIC:
+      return new GameMode(
+        GameModes.SPLICED_CLASSIC,
+        { isClassic: true, hasTrainers: true, hasMysteryEncounters: true },
+        {
+          ...classicFixedBattles,
+          [1]: new FixedBattleConfig()
+            .setBattleType(BattleType.TRAINER)
+            .setGetTrainerFunc(() => {
+              const genderIndex = globalScene.gameData.gender ?? PlayerGender.UNSET;
+              const genderType =
+                genderIndex === PlayerGender.FEMALE ? TrainerType.FUTURE_SELF_F : TrainerType.FUTURE_SELF_M;
+              const fusionistConfig = trainerConfigs[genderType]
+                .setPartyTemplates(new TrainerPartyTemplate(1, PartyMemberStrength.WEAKEST))
+                .setPartyMemberFunc(
+                  0,
+                  getRandomPartyMemberFunc([SpeciesId.CLEFFA], TrainerSlot.TRAINER, true, p => {
+                    while (p.getHeldItems().length > 0) {
+                      p.loseHeldItem(p.getHeldItems()[1], false);
+                    }
+                    p.moveset = [new PokemonMove(MoveId.MISTY_EXPLOSION, 0, 0, undefined)];
+                    p.pokeball = PokeballType.MASTER_BALL;
+                    p.shiny = true;
+                    p.variant = 2;
+                    p.abilityIndex = 2;
+                    p.passive = true;
+                    p.level = 2;
+                    p.gender = genderIndex === PlayerGender.FEMALE ? Gender.FEMALE : Gender.MALE;
+                    p.ivs = [31, 31, 31, 31, 31, 31];
+                    p.fusionSpecies = p.species;
+                    p.fusionAbilityIndex = p.abilityIndex;
+                    p.fusionGender = p.gender;
+                    p.fusionShiny = p.shiny;
+                    p.fusionVariant = p.variant;
+                    p.generateName();
+                  }),
+                )
+                .setModifierRewardFuncs(
+                  () => modifierTypes.MAP,
+                  () => modifierTypes.MEGA_BRACELET,
+                  () => modifierTypes.DYNAMAX_BAND,
+                  () => modifierTypes.IV_SCANNER,
+                );
+              const Fusionist = new Trainer(
+                genderType,
+                TrainerVariant.DEFAULT,
+                undefined,
+                undefined,
+                undefined,
+                fusionistConfig,
+              );
+              return Fusionist;
+            })
+            .setCustomModifierRewards({
+              guaranteedModifierTypeFuncs: [modifierTypes.DNA_SPLICERS],
+              rerollMultiplier: -1,
+              allowLuckUpgrades: false,
+            }),
+        },
       );
   }
 }
