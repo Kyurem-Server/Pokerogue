@@ -1,30 +1,29 @@
-import { FusionSpeciesFormEvolution, pokemonEvolutions } from "#app/data/balance/pokemon-evolutions";
-import { getBerryEffectFunc, getBerryPredicate } from "#app/data/berry";
-import { getLevelTotalExp } from "#app/data/exp";
-import { allMoves, modifierTypes } from "#app/data/data-lists";
-import { MAX_PER_TYPE_POKEBALLS } from "#app/data/pokeball";
-import { SpeciesFormChangeItemTrigger } from "#app/data/pokemon-forms/form-change-triggers";
-import type { FormChangeItem } from "#enums/form-change-item";
-import { getStatusEffectHealText } from "#app/data/status-effect";
-import type { PlayerPokemon } from "#app/field/pokemon";
-import type Pokemon from "#app/field/pokemon";
+import { applyAbAttrs } from "#abilities/apply-ab-attrs";
+import { globalScene } from "#app/global-scene";
 import { getPokemonNameWithAffix } from "#app/messages";
 import Overrides from "#app/overrides";
-import { LearnMoveType } from "#enums/learn-move-type";
-import type { VoucherType } from "#app/system/voucher";
-import { Command } from "#enums/command";
-import { addTextObject, TextStyle } from "#app/ui/text";
-import { BooleanHolder, hslToHex, isNullOrUndefined, NumberHolder, randSeedFloat, toDmgValue } from "#app/utils/common";
+import { FusionSpeciesFormEvolution, pokemonEvolutions } from "#balance/pokemon-evolutions";
+import { FRIENDSHIP_GAIN_FROM_RARE_CANDY } from "#balance/starters";
+import { getBerryEffectFunc, getBerryPredicate } from "#data/berry";
+import { allMoves, modifierTypes } from "#data/data-lists";
+import { getLevelTotalExp } from "#data/exp";
+import { SpeciesFormChangeItemTrigger } from "#data/form-change-triggers";
+import { MAX_PER_TYPE_POKEBALLS } from "#data/pokeball";
+import { getStatusEffectHealText } from "#data/status-effect";
 import { BattlerTagType } from "#enums/battler-tag-type";
 import { BerryType } from "#enums/berry-type";
+import { Color, ShadowColor } from "#enums/color";
+import { Command } from "#enums/command";
+import type { FormChangeItem } from "#enums/form-change-item";
+import { LearnMoveType } from "#enums/learn-move-type";
 import type { MoveId } from "#enums/move-id";
 import type { Nature } from "#enums/nature";
 import type { PokeballType } from "#enums/pokeball";
-import { SpeciesId } from "#enums/species-id";
-import { type PermanentStat, type TempBattleStat, BATTLE_STATS, Stat, TEMP_BATTLE_STATS } from "#enums/stat";
-import { StatusEffect } from "#enums/status-effect";
 import type { PokemonType } from "#enums/pokemon-type";
-import i18next from "i18next";
+import { SpeciesId } from "#enums/species-id";
+import { BATTLE_STATS, type PermanentStat, Stat, TEMP_BATTLE_STATS, type TempBattleStat } from "#enums/stat";
+import { StatusEffect } from "#enums/status-effect";
+import type { PlayerPokemon, Pokemon } from "#field/pokemon";
 import type {
   DoubleBattleChanceBoosterModifierType,
   EvolutionItemModifierType,
@@ -38,13 +37,13 @@ import type {
   PokemonMultiHitModifierType,
   TerastallizeModifierType,
   TmModifierType,
-} from "./modifier-type";
-import { getModifierType } from "#app/utils/modifier-utils";
-import { Color, ShadowColor } from "#enums/color";
-import { FRIENDSHIP_GAIN_FROM_RARE_CANDY } from "#app/data/balance/starters";
-import { applyAbAttrs } from "#app/data/abilities/apply-ab-attrs";
-import { globalScene } from "#app/global-scene";
-import type { ModifierInstanceMap, ModifierString } from "#app/@types/modifier-types";
+} from "#modifiers/modifier-type";
+import type { VoucherType } from "#system/voucher";
+import type { ModifierInstanceMap, ModifierString } from "#types/modifier-types";
+import { addTextObject, TextStyle } from "#ui/text";
+import { BooleanHolder, hslToHex, isNullOrUndefined, NumberHolder, randSeedFloat, toDmgValue } from "#utils/common";
+import { getModifierType } from "#utils/modifier-utils";
+import i18next from "i18next";
 
 export type ModifierPredicate = (modifier: Modifier) => boolean;
 
@@ -53,25 +52,11 @@ const iconOverflowIndex = 24;
 export const modifierSortFunc = (a: Modifier, b: Modifier): number => {
   const itemNameMatch = a.type.name.localeCompare(b.type.name);
   const typeNameMatch = a.constructor.name.localeCompare(b.constructor.name);
-  const aId = a instanceof PokemonHeldItemModifier && a.pokemonId ? a.pokemonId : 4294967295;
-  const bId = b instanceof PokemonHeldItemModifier && b.pokemonId ? b.pokemonId : 4294967295;
+  const aId = a instanceof PokemonHeldItemModifier ? a.pokemonId : -1;
+  const bId = b instanceof PokemonHeldItemModifier ? b.pokemonId : -1;
 
-  //First sort by pokemonID
-  if (aId < bId) {
-    return 1;
-  }
-  if (aId > bId) {
-    return -1;
-  }
-  if (aId === bId) {
-    //Then sort by item type
-    if (typeNameMatch === 0) {
-      return itemNameMatch;
-      //Finally sort by item name
-    }
-    return typeNameMatch;
-  }
-  return 0;
+  // First sort by pokemon ID, then by item type and then name
+  return aId - bId || typeNameMatch || itemNameMatch;
 };
 
 export class ModifierBar extends Phaser.GameObjects.Container {
@@ -758,7 +743,7 @@ export abstract class PokemonHeldItemModifier extends PersistentModifier {
     return 1;
   }
 
-  getMaxStackCount(forThreshold?: boolean): number {
+  getMaxStackCount(forThreshold = false): number {
     const pokemon = this.getPokemon();
     if (!pokemon) {
       return 0;
@@ -2815,6 +2800,7 @@ export class PokemonMultiHitModifier extends PokemonHeldItemModifier {
       damageMultiplier.value *= 1 - 0.25 * this.getStackCount();
       return true;
     }
+
     if (pokemon.turnData.hitCount - pokemon.turnData.hitsLeft !== this.getStackCount() + 1) {
       // Deal 25% damage for each remaining Multi Lens hit
       damageMultiplier.value *= 0.25;
