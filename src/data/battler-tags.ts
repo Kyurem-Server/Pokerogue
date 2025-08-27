@@ -50,6 +50,7 @@ import type {
 } from "#types/battler-tags";
 import type { Mutable } from "#types/type-helpers";
 import { BooleanHolder, coerceArray, getFrameMs, isNullOrUndefined, NumberHolder, toDmgValue } from "#utils/common";
+import { toCamelCase } from "#utils/strings";
 
 /**
  * @module
@@ -563,7 +564,7 @@ export class BeakBlastChargingTag extends BattlerTag {
           target: pokemon,
         })
       ) {
-        phaseData.attacker.trySetStatus(StatusEffect.BURN, true, pokemon);
+        phaseData.attacker.trySetStatus(StatusEffect.BURN, pokemon);
       }
       return true;
     }
@@ -1057,8 +1058,7 @@ export class SeedTag extends SerializableBattlerTag {
     // Check which opponent to restore HP to
     const source = pokemon.getOpponents().find(o => o.getBattlerIndex() === this.sourceIndex);
     if (!source) {
-      console.warn(`Failed to get source Pokemon for SeedTag lapse; id: ${this.sourceId}`);
-      return false;
+      return true;
     }
 
     const cancelled = new BooleanHolder(false);
@@ -1509,7 +1509,7 @@ export class DrowsyTag extends SerializableBattlerTag {
 
   lapse(pokemon: Pokemon, lapseType: BattlerTagLapseType): boolean {
     if (!super.lapse(pokemon, lapseType)) {
-      pokemon.trySetStatus(StatusEffect.SLEEP, true);
+      pokemon.trySetStatus(StatusEffect.SLEEP);
       return false;
     }
 
@@ -1859,7 +1859,7 @@ export class ContactSetStatusProtectedTag extends DamageProtectedTag {
    * @param user - The pokemon that is being attacked and has the tag
    */
   override onContact(attacker: Pokemon, user: Pokemon): void {
-    attacker.trySetStatus(this.#statusEffect, true, user);
+    attacker.trySetStatus(this.#statusEffect, user);
   }
 }
 
@@ -2305,7 +2305,7 @@ export class TypeBoostTag extends SerializableBattlerTag {
     globalScene.phaseManager.queueMessage(
       i18next.t("abilityTriggers:typeImmunityPowerBoost", {
         pokemonNameWithAffix: getPokemonNameWithAffix(pokemon),
-        typeName: i18next.t(`pokemonInfo:Type.${PokemonType[this.boostedType]}`),
+        typeName: i18next.t(`pokemonInfo:type.${toCamelCase(PokemonType[this.boostedType])}`),
       }),
     );
   }
@@ -2330,10 +2330,10 @@ export class CritBoostTag extends SerializableBattlerTag {
     super.onAdd(pokemon);
 
     // Dragon cheer adds +2 crit stages if the pokemon is a Dragon type when the tag is added
-    if (this.tagType === BattlerTagType.DRAGON_CHEER && pokemon.getTypes(true).includes(PokemonType.DRAGON)) {
-      (this as Mutable<this>).critStages = 2;
-    } else {
+    if (this.tagType === BattlerTagType.DRAGON_CHEER && !pokemon.getTypes(true, true).includes(PokemonType.DRAGON)) {
       (this as Mutable<this>).critStages = 1;
+    } else {
+      (this as Mutable<this>).critStages = 2;
     }
 
     globalScene.phaseManager.queueMessage(
@@ -2803,7 +2803,7 @@ export class GulpMissileTag extends SerializableBattlerTag {
       if (this.tagType === BattlerTagType.GULP_MISSILE_ARROKUDA) {
         globalScene.phaseManager.unshiftNew("StatStageChangePhase", attacker.getBattlerIndex(), false, [Stat.DEF], -1);
       } else {
-        attacker.trySetStatus(StatusEffect.PARALYSIS, true, pokemon);
+        attacker.trySetStatus(StatusEffect.PARALYSIS, pokemon);
       }
     }
     return false;

@@ -9,6 +9,7 @@ import type { Pokemon } from "#field/pokemon";
 import { getVariantTint } from "#sprites/variant";
 import { addTextObject } from "#ui/text";
 import { fixedInt, getLocalizedSpriteKey, getShinyDescriptor } from "#utils/common";
+import { toCamelCase } from "#utils/strings";
 import i18next from "i18next";
 
 /**
@@ -286,9 +287,6 @@ export abstract class BattleInfo extends Phaser.GameObjects.Container {
       2.5,
     );
     this.splicedIcon.setVisible(pokemon.isFusion(true));
-    if (!this.splicedIcon.visible) {
-      return;
-    }
     this.splicedIcon
       .on("pointerover", () =>
         globalScene.ui.showTooltip(
@@ -322,6 +320,10 @@ export abstract class BattleInfo extends Phaser.GameObjects.Container {
       .setVisible(pokemon.isShiny())
       .setTint(getVariantTint(baseVariant));
 
+    this.shinyIcon
+      .on("pointerover", () => globalScene.ui.showTooltip("", i18next.t("common:shinyOnHover") + shinyDescriptor))
+      .on("pointerout", () => globalScene.ui.hideTooltip());
+
     if (!this.shinyIcon.visible) {
       return;
     }
@@ -334,10 +336,6 @@ export abstract class BattleInfo extends Phaser.GameObjects.Container {
       }
       shinyDescriptor += ")";
     }
-
-    this.shinyIcon
-      .on("pointerover", () => globalScene.ui.showTooltip("", i18next.t("common:shinyOnHover") + shinyDescriptor))
-      .on("pointerout", () => globalScene.ui.hideTooltip());
   }
 
   initInfo(pokemon: Pokemon) {
@@ -361,7 +359,7 @@ export abstract class BattleInfo extends Phaser.GameObjects.Container {
           globalScene.ui.showTooltip(
             "",
             i18next.t("fightUiHandler:teraHover", {
-              type: i18next.t(`pokemonInfo:Type.${PokemonType[this.lastTeraType]}`),
+              type: i18next.t(`pokemonInfo:type.${toCamelCase(PokemonType[this.lastTeraType])}`),
             }),
           );
         }
