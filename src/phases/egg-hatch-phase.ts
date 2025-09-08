@@ -64,7 +64,7 @@ export class EggHatchPhase extends Phase {
   private canSkip: boolean;
   private skipped: boolean;
   /** The sound effect being played when the egg is hatched */
-  private evolutionBgm: AnySound;
+  private evolutionBgm: AnySound | null;
   private eggLapsePhase: EggLapsePhase;
 
   constructor(hatchScene: EggLapsePhase, egg: Egg, eggsToHatchCount: number) {
@@ -230,6 +230,7 @@ export class EggHatchPhase extends Phase {
     } else {
       globalScene.time.delayedCall(250, () => globalScene.setModifiersVisible(true));
     }
+    this.pokemon?.destroy();
     super.end();
   }
 
