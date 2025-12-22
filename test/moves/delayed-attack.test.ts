@@ -67,17 +67,6 @@ describe("Moves - Delayed Attacks", () => {
     }
   }
 
-  /**
-   * Expect that future sight is active with the specified number of attacks.
-   * @param numAttacks - The number of delayed attacks that should be queued; default `1`
-   */
-  function expectFutureSightActive(numAttacks = 1) {
-    const delayedAttacks = game.scene.arena.positionalTagManager["tags"].filter(
-      t => t.tagType === PositionalTagType.DELAYED_ATTACK,
-    );
-    expect(delayedAttacks).toHaveLength(numAttacks);
-  }
-
   it.each<{ name: string; move: MoveId }>([
     { name: "Future Sight", move: MoveId.FUTURE_SIGHT },
     { name: "Doom Desire", move: MoveId.DOOM_DESIRE },
@@ -88,7 +77,12 @@ describe("Moves - Delayed Attacks", () => {
     game.move.use(move);
     await game.toNextTurn();
 
-    expectFutureSightActive();
+    expect(game).toHavePositionalTag({
+      tagType: PositionalTagType.DELAYED_ATTACK,
+      sourceMove: move,
+      targetIndex: BattlerIndex.ENEMY,
+      turnCount: 2,
+    });
 
     game.doSwitchPokemon(1);
     game.forceEnemyToSwitch();
@@ -96,10 +90,10 @@ describe("Moves - Delayed Attacks", () => {
 
     await passTurns(1);
 
-    expectFutureSightActive(0);
+    expect(game).not.toHavePositionalTag(PositionalTagType.DELAYED_ATTACK);
     const enemy = game.field.getEnemyPokemon();
     expect(enemy).not.toHaveFullHp();
-    expect(game.textInterceptor.logs).toContain(
+    expect(game).toHaveShownMessage(
       i18next.t("moveTriggers:tookMoveAttack", {
         pokemonName: getPokemonNameWithAffix(enemy),
         moveName: allMoves[move].name,
@@ -113,14 +107,14 @@ describe("Moves - Delayed Attacks", () => {
     game.move.use(MoveId.FUTURE_SIGHT);
     await game.toNextTurn();
 
-    expectFutureSightActive();
+    expect(game).toHavePositionalTag(PositionalTagType.DELAYED_ATTACK);
     const bronzong = game.field.getPlayerPokemon();
     expect(bronzong.getLastXMoves()[0].result).toBe(MoveResult.OTHER);
 
     game.move.use(MoveId.FUTURE_SIGHT);
     await game.toNextTurn();
 
-    expectFutureSightActive();
+    expect(game).toHavePositionalTag(PositionalTagType.DELAYED_ATTACK);
     expect(bronzong.getLastXMoves()[0].result).toBe(MoveResult.FAIL);
   });
 
@@ -131,13 +125,13 @@ describe("Moves - Delayed Attacks", () => {
     game.move.forceMetronomeMove(MoveId.FUTURE_SIGHT);
     await game.toNextTurn();
 
-    expectFutureSightActive();
+    expect(game).toHavePositionalTag(PositionalTagType.DELAYED_ATTACK);
     const enemy = game.field.getEnemyPokemon();
     expect(enemy).toHaveFullHp();
 
     await passTurns(2);
 
-    expectFutureSightActive(0);
+    expect(game).not.toHavePositionalTag(PositionalTagType.DELAYED_ATTACK);
     expect(enemy).not.toHaveFullHp();
   });
 
@@ -151,7 +145,7 @@ describe("Moves - Delayed Attacks", () => {
     game.move.use(MoveId.FUTURE_SIGHT, BattlerIndex.PLAYER_2, BattlerIndex.ENEMY_2);
     await game.toEndOfTurn();
 
-    expectFutureSightActive(2);
+    expect(game).toHavePositionalTag(PositionalTagType.DELAYED_ATTACK, 2);
     expect(enemy1).toHaveFullHp();
     expect(enemy2).toHaveFullHp();
     expect(karp.getLastXMoves()[0].result).toBe(MoveResult.OTHER);
@@ -159,6 +153,7 @@ describe("Moves - Delayed Attacks", () => {
 
     await passTurns(2);
 
+    expect(game).not.toHavePositionalTag(PositionalTagType.DELAYED_ATTACK);
     expect(enemy1).not.toHaveFullHp();
     expect(enemy2).not.toHaveFullHp();
   });
@@ -179,7 +174,7 @@ describe("Moves - Delayed Attacks", () => {
     await game.setTurnOrder(oldOrder.map(p => p.getBattlerIndex()));
     await game.toNextTurn();
 
-    expectFutureSightActive(4);
+    expect(game).toHavePositionalTag(PositionalTagType.DELAYED_ATTACK, 4);
 
     // Lower speed to change turn order
     alomomola.setStatStage(Stat.SPD, 6);
@@ -191,9 +186,9 @@ describe("Moves - Delayed Attacks", () => {
     await passTurns(2, false);
 
     // All attacks have concluded at this point, unshifting new `MoveEffectPhase`s to the queue.
-    expectFutureSightActive(0);
+    expect(game).not.toHavePositionalTag(PositionalTagType.DELAYED_ATTACK);
 
-    const MEPs = game.scene.phaseManager.phaseQueue.filter(p => p.is("MoveEffectPhase"));
+    const MEPs = game.scene.phaseManager["phaseQueue"].findAll("MoveEffectPhase");
     expect(MEPs).toHaveLength(4);
     expect(MEPs.map(mep => mep.getPokemon())).toEqual(oldOrder);
   });
@@ -208,7 +203,7 @@ describe("Moves - Delayed Attacks", () => {
     game.move.use(MoveId.SPLASH, BattlerIndex.PLAYER_2);
     await game.toNextTurn();
 
-    expectFutureSightActive(1);
+    expect(game).toHavePositionalTag(PositionalTagType.DELAYED_ATTACK, 1);
 
     // Milotic / Feebas // Karp
     game.doSwitchPokemon(2);
@@ -227,7 +222,7 @@ describe("Moves - Delayed Attacks", () => {
 
     expect(karp).toHaveFullHp();
     expect(feebas).toHaveFullHp();
-    expect(game.textInterceptor.logs).not.toContain(
+    expect(game).not.toHaveShownMessage(
       i18next.t("moveTriggers:tookMoveAttack", {
         pokemonName: getPokemonNameWithAffix(karp),
         moveName: allMoves[MoveId.FUTURE_SIGHT].name,
@@ -246,7 +241,7 @@ describe("Moves - Delayed Attacks", () => {
     await game.toNextTurn();
 
     expect(enemy2.isFainted()).toBe(true);
-    expectFutureSightActive();
+    expect(game).toHavePositionalTag(PositionalTagType.DELAYED_ATTACK);
 
     expect(game).toHavePositionalTag({
       tagType: PositionalTagType.DELAYED_ATTACK,
@@ -256,7 +251,7 @@ describe("Moves - Delayed Attacks", () => {
     await passTurns(2);
 
     expect(enemy1).not.toHaveFullHp();
-    expect(game.textInterceptor.logs).toContain(
+    expect(game).toHaveShownMessage(
       i18next.t("moveTriggers:tookMoveAttack", {
         pokemonName: getPokemonNameWithAffix(enemy1),
         moveName: allMoves[MoveId.FUTURE_SIGHT].name,
@@ -273,7 +268,7 @@ describe("Moves - Delayed Attacks", () => {
     game.move.use(MoveId.FUTURE_SIGHT, BattlerIndex.PLAYER, BattlerIndex.ENEMY_2);
     await game.toNextTurn();
 
-    expectFutureSightActive(1);
+    expect(game).toHavePositionalTag(PositionalTagType.DELAYED_ATTACK, 1);
 
     game.move.use(MoveId.SPLASH);
     await game.killPokemon(enemy2);
@@ -282,9 +277,9 @@ describe("Moves - Delayed Attacks", () => {
     game.move.use(MoveId.SPLASH);
     await game.toNextTurn();
 
-    expectFutureSightActive(0);
+    expect(game).not.toHavePositionalTag(PositionalTagType.DELAYED_ATTACK);
     expect(enemy1).toHaveFullHp();
-    expect(game.textInterceptor.logs).not.toContain(
+    expect(game).not.toHaveShownMessage(
       i18next.t("moveTriggers:tookMoveAttack", {
         pokemonName: getPokemonNameWithAffix(enemy1),
         moveName: allMoves[MoveId.FUTURE_SIGHT].name,
@@ -303,7 +298,7 @@ describe("Moves - Delayed Attacks", () => {
     game.move.use(MoveId.FUTURE_SIGHT, BattlerIndex.PLAYER, BattlerIndex.ENEMY_2);
     await game.toNextTurn();
 
-    expectFutureSightActive(1);
+    expect(game).toHavePositionalTag(PositionalTagType.DELAYED_ATTACK, 1);
 
     game.move.use(MoveId.SPLASH, BattlerIndex.PLAYER);
     await game.toNextTurn();
@@ -321,7 +316,7 @@ describe("Moves - Delayed Attacks", () => {
 
     expect(enemy1).toHaveFullHp();
     expect(enemy2).not.toHaveFullHp();
-    expect(game.textInterceptor.logs).toContain(
+    expect(game).toHaveShownMessage(
       i18next.t("moveTriggers:tookMoveAttack", {
         pokemonName: getPokemonNameWithAffix(enemy2),
         moveName: allMoves[MoveId.FUTURE_SIGHT].name,
@@ -341,7 +336,7 @@ describe("Moves - Delayed Attacks", () => {
     game.move.use(MoveId.DOOM_DESIRE);
     await game.toNextTurn();
 
-    expectFutureSightActive();
+    expect(game).toHavePositionalTag(PositionalTagType.DELAYED_ATTACK);
 
     await passTurns(1);
 
@@ -354,7 +349,7 @@ describe("Moves - Delayed Attacks", () => {
     // Player Normalize was not applied due to being off field
     const enemy = game.field.getEnemyPokemon();
     expect(enemy).not.toHaveFullHp();
-    expect(game.textInterceptor.logs).toContain(
+    expect(game).toHaveShownMessage(
       i18next.t("moveTriggers:tookMoveAttack", {
         pokemonName: getPokemonNameWithAffix(enemy),
         moveName: allMoves[MoveId.DOOM_DESIRE].name,
@@ -371,7 +366,7 @@ describe("Moves - Delayed Attacks", () => {
     game.move.use(MoveId.FUTURE_SIGHT);
     await game.toNextTurn();
 
-    expectFutureSightActive();
+    expect(game).toHavePositionalTag(PositionalTagType.DELAYED_ATTACK);
 
     await passTurns(1);
 
@@ -401,7 +396,7 @@ describe("Moves - Delayed Attacks", () => {
     await game.move.forceEnemyMove(MoveId.FUTURE_SIGHT);
     await game.toNextTurn();
 
-    expectFutureSightActive(1);
+    expect(game).toHavePositionalTag(PositionalTagType.DELAYED_ATTACK, 1);
 
     await passTurns(1);
 
@@ -412,7 +407,7 @@ describe("Moves - Delayed Attacks", () => {
     });
     await game.toEndOfTurn();
 
-    expectFutureSightActive(0);
+    expect(game).not.toHavePositionalTag(PositionalTagType.DELAYED_ATTACK);
   });
 
   // TODO: Implement and move to a power spot's test file

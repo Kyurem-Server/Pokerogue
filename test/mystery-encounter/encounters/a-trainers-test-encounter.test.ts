@@ -9,8 +9,7 @@ import { ATrainersTestEncounter } from "#mystery-encounters/a-trainers-test-enco
 import * as EncounterPhaseUtils from "#mystery-encounters/encounter-phase-utils";
 import * as MysteryEncounters from "#mystery-encounters/mystery-encounters";
 import { HUMAN_TRANSITABLE_BIOMES } from "#mystery-encounters/mystery-encounters";
-import { CommandPhase } from "#phases/command-phase";
-import { PartyHealPhase } from "#phases/party-heal-phase";
+import type { PartyHealPhase } from "#phases/party-heal-phase";
 import { SelectModifierPhase } from "#phases/select-modifier-phase";
 import {
   runMysteryEncounterToEnd,
@@ -106,7 +105,7 @@ describe("A Trainer's Test - Mystery Encounter", () => {
       await runMysteryEncounterToEnd(game, 1, undefined, true);
 
       const enemyField = scene.getEnemyField();
-      expect(scene.phaseManager.getCurrentPhase()?.constructor.name).toBe(CommandPhase.name);
+      expect(game).toBeAtPhase("CommandPhase");
       expect(enemyField.length).toBe(1);
       expect(scene.currentBattle.trainer).toBeDefined();
       expect(
@@ -131,13 +130,13 @@ describe("A Trainer's Test - Mystery Encounter", () => {
       await runMysteryEncounterToEnd(game, 1, undefined, true);
       await skipBattleRunMysteryEncounterRewardsPhase(game);
       await game.phaseInterceptor.to(SelectModifierPhase, false);
-      expect(scene.phaseManager.getCurrentPhase()?.constructor.name).toBe(SelectModifierPhase.name);
+      expect(game).toBeAtPhase("SelectModifierPhase");
 
       const eggsAfter = scene.gameData.eggs;
       expect(eggsAfter).toBeDefined();
       expect(eggsBeforeLength + 1).toBe(eggsAfter.length);
-      const eggTier = eggsAfter[eggsAfter.length - 1].tier;
-      expect(eggTier === EggTier.EPIC || eggTier === EggTier.LEGENDARY).toBeTruthy();
+      const eggTier = eggsAfter.at(-1)?.tier;
+      expect(eggTier).toBeOneOf([EggTier.EPIC, EggTier.LEGENDARY]);
     });
   });
 
@@ -166,8 +165,8 @@ describe("A Trainer's Test - Mystery Encounter", () => {
       await game.runToMysteryEncounter(MysteryEncounterType.A_TRAINERS_TEST, defaultParty);
       await runMysteryEncounterToEnd(game, 2);
 
-      const partyHealPhases = phaseSpy.mock.calls.filter(p => p[0] instanceof PartyHealPhase).map(p => p[0]);
-      expect(partyHealPhases.length).toBe(1);
+      const partyHealPhases = phaseSpy.mock.calls.flat().filter((p): p is PartyHealPhase => p.is("PartyHealPhase"));
+      expect(partyHealPhases).toHaveLength(1);
     });
 
     it("Should reward the player with a Rare egg", async () => {
@@ -179,12 +178,12 @@ describe("A Trainer's Test - Mystery Encounter", () => {
 
       await runMysteryEncounterToEnd(game, 2);
       await game.phaseInterceptor.to(SelectModifierPhase, false);
-      expect(scene.phaseManager.getCurrentPhase()?.constructor.name).toBe(SelectModifierPhase.name);
+      expect(game).toBeAtPhase("SelectModifierPhase");
 
       const eggsAfter = scene.gameData.eggs;
       expect(eggsAfter).toBeDefined();
       expect(eggsBeforeLength + 1).toBe(eggsAfter.length);
-      const eggTier = eggsAfter[eggsAfter.length - 1].tier;
+      const eggTier = eggsAfter.at(-1)?.tier;
       expect(eggTier).toBe(EggTier.RARE);
     });
 

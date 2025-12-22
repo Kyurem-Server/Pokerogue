@@ -2,30 +2,54 @@ import type { ArenaTag, ArenaTagTypeMap } from "#data/arena-tag";
 import { ArenaTagSide } from "#enums/arena-tag-side";
 import type { ArenaTagType } from "#enums/arena-tag-type";
 import type { OneOther } from "#test/@types/test-helpers";
-// biome-ignore lint/correctness/noUnusedImports: TSDoc
 import type { GameManager } from "#test/test-utils/game-manager";
 import { getOnelineDiffStr } from "#test/test-utils/string-utils";
 import { isGameManagerInstance, receivedStr } from "#test/test-utils/test-utils";
+import type { ArenaTagDataMap, SerializableArenaTagType } from "#types/arena-tags";
 import type { MatcherState, SyncExpectationResult } from "@vitest/expect";
 
-// intersection required to preserve T for inferences
-export type toHaveArenaTagOptions<T extends ArenaTagType> = OneOther<ArenaTagTypeMap[T], "tagType" | "side"> & {
-  tagType: T;
+/**
+ * Helper type for serializable arena tag options.
+ * Allows for caching to avoid repeated instantiation and faster typechecking.
+ * @internal
+ */
+type SerializableArenaTagOptions<A extends SerializableArenaTagType> = OneOther<ArenaTagDataMap[A], "tagType"> & {
+  tagType: A;
 };
 
 /**
+ * Helper type for non-serializable arena tag options.
+ * Allows for caching to avoid repeated instantiation and faster typechecking.
+ * @internal
+ */
+type NonSerializableArenaTagOptions<A extends ArenaTagType> = OneOther<ArenaTagTypeMap[A], "tagType"> & {
+  tagType: A;
+};
+
+/**
+ * Options type for {@linkcode toHaveArenaTag}.
+ * @typeParam A - The {@linkcode ArenaTagType} being checked
+ * @remarks
+ * If `A` corresponds to a serializable `ArenaTag`, only properties allowed to be serialized
+ * (i.e. can change across instances) will be present and able to be checked.
+ */
+export type toHaveArenaTagOptions<A extends ArenaTagType> = [A] extends [SerializableArenaTagType]
+  ? SerializableArenaTagOptions<A>
+  : NonSerializableArenaTagOptions<A>;
+
+/**
  * Matcher to check if the {@linkcode Arena} has a given {@linkcode ArenaTag} active.
- * @param received - The object to check. Should be the current {@linkcode GameManager}.
+ * @param received - The object to check. Should be the current {@linkcode GameManager}
  * @param expectedTag - The `ArenaTagType` of the desired tag, or a partially-filled object
  * containing the desired properties
  * @param side - The {@linkcode ArenaTagSide | side of the field} the tag should affect, or
  * {@linkcode ArenaTagSide.BOTH} to check both sides
  * @returns The result of the matching
  */
-export function toHaveArenaTag<T extends ArenaTagType>(
+export function toHaveArenaTag<A extends ArenaTagType>(
   this: MatcherState,
   received: unknown,
-  expectedTag: T | toHaveArenaTagOptions<T>,
+  expectedTag: A | toHaveArenaTagOptions<A>,
   side: ArenaTagSide = ArenaTagSide.BOTH,
 ): SyncExpectationResult {
   if (!isGameManagerInstance(received)) {

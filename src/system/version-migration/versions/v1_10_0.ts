@@ -2,8 +2,8 @@ import type { BattlerIndex } from "#enums/battler-index";
 import type { MoveId } from "#enums/move-id";
 import type { MoveResult } from "#enums/move-result";
 import { MoveUseMode } from "#enums/move-use-mode";
-import type { SessionSaveData } from "#system/game-data";
-import type { SessionSaveMigrator } from "#types/session-save-migrator";
+import type { SessionSaveData } from "#types/save-data";
+import type { SessionSaveMigrator } from "#types/save-migrators";
 import type { TurnMove } from "#types/turn-move";
 
 /** Prior signature of `TurnMove`; used to ensure parity */

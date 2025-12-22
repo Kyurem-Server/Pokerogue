@@ -70,7 +70,7 @@ const repeatInputDelayMillis = 250;
  * providing a unified interface for all input-related interactions.
  */
 export class InputsController {
-  private gamepads: Array<Phaser.Input.Gamepad.Gamepad> = [];
+  private gamepads: Phaser.Input.Gamepad.Gamepad[] = [];
   public events: Phaser.Events.EventEmitter;
 
   private buttonLock: Button[] = [];
@@ -80,7 +80,7 @@ export class InputsController {
   public gamepadSupport = true;
   public selectedDevice;
 
-  private disconnectedGamepads: Array<string> = [];
+  private disconnectedGamepads: string[] = [];
 
   public lastSource = "keyboard";
   private inputInterval: NodeJS.Timeout[] = [];
@@ -223,7 +223,7 @@ export class InputsController {
    * Retrieves the identifiers of all connected gamepads, excluding any that are currently marked as disconnected.
    * @returns Array<String> An array of strings representing the IDs of the connected gamepads.
    */
-  getGamepadsName(): Array<string> {
+  getGamepadsName(): string[] {
     return this.gamepads.filter(g => !this.disconnectedGamepads.includes(g.id)).map(g => g.id);
   }
 
@@ -406,9 +406,9 @@ export class InputsController {
     }
     this.lastSource = "gamepad";
     if (
-      !this.selectedDevice[Device.GAMEPAD] ||
-      (globalScene.ui.getMode() !== UiMode.GAMEPAD_BINDING &&
-        this.selectedDevice[Device.GAMEPAD] !== pad.id.toLowerCase())
+      !this.selectedDevice[Device.GAMEPAD]
+      || (globalScene.ui.getMode() !== UiMode.GAMEPAD_BINDING
+        && this.selectedDevice[Device.GAMEPAD] !== pad.id.toLowerCase())
     ) {
       this.setChosenGamepad(pad.id);
     }
@@ -585,7 +585,7 @@ export class InputsController {
 
   resetConfigs(): void {
     this.configs = new Map();
-    if (this.getGamepadsName()?.length) {
+    if (this.getGamepadsName()?.length > 0) {
       this.setupGamepad(this.selectedDevice[Device.GAMEPAD]);
     }
     this.setupKeyboard();
