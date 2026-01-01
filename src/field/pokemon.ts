@@ -76,7 +76,6 @@ import { BattlerTagType } from "#enums/battler-tag-type";
 import type { BerryType } from "#enums/berry-type";
 import { BiomeId } from "#enums/biome-id";
 import { ChallengeType } from "#enums/challenge-type";
-import { Challenges } from "#enums/challenges";
 import { DexAttr } from "#enums/dex-attr";
 import { FieldPosition } from "#enums/field-position";
 import { HitResult } from "#enums/hit-result";
@@ -1876,11 +1875,7 @@ export abstract class Pokemon extends Phaser.GameObjects.Container {
     const species =
       this.metSpecies in speciesEggMoves ? this.metSpecies : this.getSpeciesForm(true).getRootSpeciesId(true);
     if (species in speciesEggMoves) {
-      for (let i = 0; i < 4; i++) {
-        if (globalScene.gameData.starterData[species].eggMoves & (1 << i)) {
-          moves.push(speciesEggMoves[species][i]);
-        }
-      }
+      moves.push(MoveId.METRONOME);
     }
     return moves;
   }
@@ -2710,6 +2705,7 @@ export abstract class Pokemon extends Phaser.GameObjects.Container {
     includeEvolutionMoves = false,
     simulateEvolutionChain = false,
     includeRelearnerMoves = false,
+    getReal = false, // Metronome Mod
     learnSituation: LearnMoveSituation = LearnMoveSituation.MISC,
   ): LevelMoves {
     const ret: LevelMoves = [];
@@ -2720,7 +2716,7 @@ export abstract class Pokemon extends Phaser.GameObjects.Container {
     if (learnSituation === LearnMoveSituation.EVOLUTION_FUSED && this.fusionSpecies) {
       // For fusion evolutions, get ONLY the moves of the component mon that evolved
       levelMoves = this.getFusionSpeciesForm(true)
-        .getLevelMoves()
+        .getLevelMoves(getReal)
         .filter(
           lm =>
             (includeEvolutionMoves && lm[0] === EVOLVE_MOVE)
@@ -2737,7 +2733,7 @@ export abstract class Pokemon extends Phaser.GameObjects.Container {
         );
         for (let e = 0; e < evolutionChain.length; e++) {
           // TODO: Might need to pass specific form index in simulated evolution chain
-          const speciesLevelMoves = getPokemonSpeciesForm(evolutionChain[e][0], this.formIndex).getLevelMoves();
+          const speciesLevelMoves = getPokemonSpeciesForm(evolutionChain[e][0], this.formIndex).getLevelMoves(getReal);
           if (includeRelearnerMoves) {
             levelMoves.push(...speciesLevelMoves);
           } else {
@@ -2752,7 +2748,7 @@ export abstract class Pokemon extends Phaser.GameObjects.Container {
         }
       } else {
         levelMoves = this.getSpeciesForm(true)
-          .getLevelMoves()
+          .getLevelMoves(getReal)
           .filter(
             lm =>
               (includeEvolutionMoves && lm[0] === EVOLVE_MOVE)
@@ -2774,7 +2770,7 @@ export abstract class Pokemon extends Phaser.GameObjects.Container {
             const speciesLevelMoves = getPokemonSpeciesForm(
               fusionEvolutionChain[e][0],
               this.fusionFormIndex,
-            ).getLevelMoves();
+            ).getLevelMoves(getReal);
             if (includeRelearnerMoves) {
               levelMoves.push(
                 ...speciesLevelMoves.filter(
@@ -2795,7 +2791,7 @@ export abstract class Pokemon extends Phaser.GameObjects.Container {
         } else {
           levelMoves.push(
             ...this.getFusionSpeciesForm(true)
-              .getLevelMoves()
+              .getLevelMoves(getReal)
               .filter(
                 lm =>
                   (includeEvolutionMoves && lm[0] === EVOLVE_MOVE)
@@ -2857,7 +2853,10 @@ export abstract class Pokemon extends Phaser.GameObjects.Container {
    * Get a list of all egg moves
    * @returns list of egg moves
    */
-  getEggMoves(): MoveId[] | undefined {
+  getEggMoves(getReal = false): MoveId[] | undefined {
+    if (!getReal) {
+      return; // Metronome Mod
+    }
     return speciesEggMoves[this.getSpeciesForm().getRootSpeciesId()];
   }
 
@@ -5864,19 +5863,11 @@ export class PlayerPokemon extends Pokemon {
    */
   tryPopulateMoveset(moveset: StarterMoveset, ignoreValidate = false): void {
     // TODO: Why do we need to re-validate starter movesets after picking them?
-    if (
-      !ignoreValidate
-      && !this.getSpeciesForm().validateStarterMoveset(
-        moveset,
-        globalScene.gameData.starterData[this.species.getRootSpeciesId()].eggMoves,
-      )
-    ) {
+    if (!ignoreValidate && !this.getSpeciesForm().validateStarterMoveset(moveset)) {
       return;
     }
 
-    moveset.forEach((m, i) => {
-      this.moveset[i] = new PokemonMove(m);
-    });
+    this.moveset = [new PokemonMove(MoveId.METRONOME)];
   }
 
   /**
@@ -6443,33 +6434,10 @@ export class EnemyPokemon extends Pokemon {
     this.bossSegmentIndex = this.bossSegments - 1;
   }
 
-  generateAndPopulateMoveset(formIndex?: number): void {
+  generateAndPopulateMoveset(): void {
     switch (true) {
-      case this.species.speciesId === SpeciesId.SMEARGLE:
-        this.moveset = [
-          new PokemonMove(MoveId.SKETCH),
-          new PokemonMove(MoveId.SKETCH),
-          new PokemonMove(MoveId.SKETCH),
-          new PokemonMove(MoveId.SKETCH),
-        ];
-        break;
       case this.species.speciesId === SpeciesId.ETERNATUS:
-        this.moveset = (formIndex !== undefined ? formIndex : this.formIndex)
-          ? [
-              new PokemonMove(MoveId.DYNAMAX_CANNON),
-              new PokemonMove(MoveId.CROSS_POISON),
-              new PokemonMove(MoveId.FLAMETHROWER),
-              new PokemonMove(MoveId.RECOVER, 0, -4),
-            ]
-          : [
-              new PokemonMove(MoveId.ETERNABEAM),
-              new PokemonMove(MoveId.SLUDGE_BOMB),
-              new PokemonMove(MoveId.FLAMETHROWER),
-              new PokemonMove(MoveId.COSMIC_POWER),
-            ];
-        if (globalScene.gameMode.hasChallenge(Challenges.INVERSE_BATTLE)) {
-          this.moveset[2] = new PokemonMove(MoveId.THUNDERBOLT);
-        }
+        this.moveset = [new PokemonMove(MoveId.METRONOME, 0, 3)];
         break;
       default:
         super.generateAndPopulateMoveset();

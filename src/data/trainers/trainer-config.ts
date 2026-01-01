@@ -1098,7 +1098,7 @@ export const trainerConfigs: TrainerConfigs = {
             ].includes(a),
         )
         || s
-          .getLevelMoves()
+          .getLevelMoves(true)
           .some(plm =>
             [MoveId.SOFT_BOILED, MoveId.SPORE, MoveId.MILK_DRINK, MoveId.OVERHEAT, MoveId.TEATIME].includes(plm[1]),
           ),
@@ -1377,11 +1377,11 @@ export const trainerConfigs: TrainerConfigs = {
     .setHasDouble("Medical Team")
     .setMoneyMultiplier(3)
     .setEncounterBgm(TrainerType.CLERK)
-    .setSpeciesFilter(s => !!s.getLevelMoves().find(plm => plm[1] === MoveId.HEAL_PULSE)),
+    .setSpeciesFilter(s => !!s.getLevelMoves(true).find(plm => plm[1] === MoveId.HEAL_PULSE)),
   [TrainerType.FIREBREATHER]: new TrainerConfig(++t)
     .setMoneyMultiplier(1.4)
     .setEncounterBgm(TrainerType.ROUGHNECK)
-    .setSpeciesFilter(s => !!s.getLevelMoves().find(plm => plm[1] === MoveId.SMOG) || s.isOfType(PokemonType.FIRE)),
+    .setSpeciesFilter(s => !!s.getLevelMoves(true).find(plm => plm[1] === MoveId.SMOG) || s.isOfType(PokemonType.FIRE)),
   [TrainerType.FISHERMAN]: new TrainerConfig(++t)
     .setMoneyMultiplier(1.25)
     .setEncounterBgm(TrainerType.BACKPACKER)
@@ -1508,7 +1508,7 @@ export const trainerConfigs: TrainerConfigs = {
       trainerPartyTemplates.TWO_WEAK_ONE_AVG,
       trainerPartyTemplates.TWO_AVG,
     )
-    .setSpeciesFilter(s => !!s.getLevelMoves().find(plm => plm[1] === MoveId.SING)),
+    .setSpeciesFilter(s => !!s.getLevelMoves(true).find(plm => plm[1] === MoveId.SING)),
   [TrainerType.HEX_MANIAC]: new TrainerConfig(++t)
     .setMoneyMultiplier(1.5)
     .setEncounterBgm(TrainerType.PSYCHIC)
@@ -1569,7 +1569,7 @@ export const trainerConfigs: TrainerConfigs = {
               AbilityId.DRY_SKIN,
               AbilityId.WIND_POWER,
             ].includes(a),
-        ) || s.getLevelMoves().some(plm => plm[1] === MoveId.RAIN_DANCE),
+        ) || s.getLevelMoves(true).some(plm => plm[1] === MoveId.RAIN_DANCE),
     ), // Mons with rain abilities or who learn Rain Dance by level
   [TrainerType.PILOT]: new TrainerConfig(++t)
     .setMoneyMultiplier(1.75)

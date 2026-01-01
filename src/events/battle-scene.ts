@@ -1,5 +1,6 @@
 import type { BerryModifier } from "#modifiers/modifier";
 import type { Move } from "#moves/move";
+import type { PokemonMove } from "#moves/pokemon-move";
 
 /** Alias for all {@linkcode BattleScene} events */
 export enum BattleSceneEventType {
@@ -59,10 +60,10 @@ export class MoveUsedEvent extends Event {
   /** The ID of the {@linkcode Pokemon} that used the {@linkcode Move} */
   public pokemonId: number;
   /** The {@linkcode Move} used */
-  public move: Move;
+  public move: PokemonMove;
   /** The amount of PP used on the {@linkcode Move} this turn */
   public ppUsed: number;
-  constructor(userId: number, move: Move, ppUsed: number) {
+  constructor(userId: number, move: PokemonMove, ppUsed: number) {
     super(BattleSceneEventType.MOVE_USED);
 
     this.pokemonId = userId;

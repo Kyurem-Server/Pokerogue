@@ -225,7 +225,7 @@ export const WeirdDreamEncounter: MysteryEncounter = MysteryEncounterBuilder.wit
         globalScene.phaseManager.unshiftNew("PartyHealPhase", true);
         setEncounterRewards({
           guaranteedModifierTypeFuncs: [
-            modifierTypes.MEMORY_MUSHROOM,
+            modifierTypes.PP_UP,
             modifierTypes.ROGUE_BALL,
             modifierTypes.MINT,
             modifierTypes.MINT,

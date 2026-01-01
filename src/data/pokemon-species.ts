@@ -2,11 +2,9 @@ import { determineEnemySpecies } from "#app/ai/ai-species-gen";
 import type { AnySound } from "#app/battle-scene";
 import type { GameMode } from "#app/game-mode";
 import { globalScene } from "#app/global-scene";
-import { speciesEggMoves } from "#balance/egg-moves";
 import { starterPassiveAbilities } from "#balance/passives";
 import { pokemonEvolutions, pokemonPrevolutions } from "#balance/pokemon-evolutions";
 import {
-  pokemonFormLevelMoves,
   pokemonFormLevelMoves as pokemonSpeciesFormLevelMoves,
   pokemonSpeciesLevelMoves,
 } from "#balance/pokemon-level-moves";
@@ -17,6 +15,7 @@ import { Gender } from "#data/gender";
 import { AbilityId } from "#enums/ability-id";
 import { DexAttr } from "#enums/dex-attr";
 import { EvoLevelThresholdKind } from "#enums/evo-level-threshold-kind";
+import { MoveId } from "#enums/move-id";
 import { PartyMemberStrength } from "#enums/party-member-strength";
 import type { PokemonType } from "#enums/pokemon-type";
 import { SpeciesFormKey } from "#enums/species-form-key";
@@ -221,7 +220,10 @@ export abstract class PokemonSpeciesForm {
     return starterPassiveAbilities[starterSpeciesId][formIndex];
   }
 
-  getLevelMoves(): LevelMoves {
+  getLevelMoves(getReal = false): LevelMoves {
+    if (!getReal) {
+      return [[1, MoveId.METRONOME]]; // Metronome Mod
+    }
     if (
       pokemonSpeciesFormLevelMoves.hasOwnProperty(this.speciesId)
       && pokemonSpeciesFormLevelMoves[this.speciesId].hasOwnProperty(this.formIndex)
@@ -479,23 +481,9 @@ export abstract class PokemonSpeciesForm {
     return `cry/${ret}`;
   }
 
-  validateStarterMoveset(moveset: StarterMoveset, eggMoves: number): boolean {
-    const rootSpeciesId = this.getRootSpeciesId();
+  validateStarterMoveset(moveset: StarterMoveset): boolean {
     for (const moveId of moveset) {
-      if (speciesEggMoves.hasOwnProperty(rootSpeciesId)) {
-        const eggMoveIndex = speciesEggMoves[rootSpeciesId].indexOf(moveId);
-        if (eggMoveIndex > -1 && eggMoves & (1 << eggMoveIndex)) {
-          continue;
-        }
-      }
-      if (
-        pokemonFormLevelMoves.hasOwnProperty(this.speciesId)
-        && pokemonFormLevelMoves[this.speciesId].hasOwnProperty(this.formIndex)
-      ) {
-        if (!pokemonFormLevelMoves[this.speciesId][this.formIndex].find(lm => lm[0] <= 5 && lm[1] === moveId)) {
-          return false;
-        }
-      } else if (!pokemonSpeciesLevelMoves[this.speciesId].find(lm => lm[0] <= 5 && lm[1] === moveId)) {
+      if (moveId !== MoveId.METRONOME) {
         return false;
       }
     }

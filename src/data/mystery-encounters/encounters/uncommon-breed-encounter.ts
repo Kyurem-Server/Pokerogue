@@ -2,7 +2,7 @@ import { CLASSIC_MODE_MYSTERY_ENCOUNTER_WAVES } from "#app/constants";
 import { globalScene } from "#app/global-scene";
 import { BattlerIndex } from "#enums/battler-index";
 import { BattlerTagType } from "#enums/battler-tag-type";
-import type { MoveId } from "#enums/move-id";
+import { MoveId } from "#enums/move-id";
 import { MoveUseMode } from "#enums/move-use-mode";
 import { MysteryEncounterOptionMode } from "#enums/mystery-encounter-option-mode";
 import { MysteryEncounterTier } from "#enums/mystery-encounter-tier";
@@ -70,7 +70,7 @@ export const UncommonBreedEncounter: MysteryEncounter = MysteryEncounterBuilder.
     });
 
     // Pokemon will always have one of its egg moves in its moveset
-    const eggMoves = pokemon.getEggMoves();
+    const eggMoves: MoveId[] | undefined = [MoveId.METRONOME];
     if (eggMoves) {
       const eggMoveIndex = randSeedInt(4);
       const randomEggMove: MoveId = eggMoves[eggMoveIndex];

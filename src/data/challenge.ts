@@ -928,7 +928,7 @@ export class FreshStartChallenge extends Challenge {
     pokemon.abilityIndex %= 2; // Always base ability, if you set it to hidden it wraps to first ability
     pokemon.passive = false; // Passive isn't unlocked
     let validMoves = pokemon.species
-      .getLevelMoves()
+      .getLevelMoves(false)
       .filter(m => isBetween(m[0], 1, 5))
       .map(lm => lm[1]);
     // Filter egg moves out of the moveset

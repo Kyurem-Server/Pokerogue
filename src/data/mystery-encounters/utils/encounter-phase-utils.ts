@@ -21,7 +21,7 @@ import { BiomeId } from "#enums/biome-id";
 import { BiomePoolTier } from "#enums/biome-pool-tier";
 import { FieldPosition } from "#enums/field-position";
 import { ModifierPoolType } from "#enums/modifier-pool-type";
-import type { MoveId } from "#enums/move-id";
+import { MoveId } from "#enums/move-id";
 import { MysteryEncounterMode } from "#enums/mystery-encounter-mode";
 import type { Nature } from "#enums/nature";
 import { PokemonType } from "#enums/pokemon-type";
@@ -361,11 +361,13 @@ export async function initBattleWithEnemyConfig(partyConfig: EnemyPartyConfig): 
       }
 
       // Set moves
-      if (config?.moveSet && config.moveSet.length > 0) {
-        const moves = config.moveSet.map(m => new PokemonMove(m));
-        enemyPokemon.moveset = moves;
-        enemyPokemon.summonData.moveset = moves;
+      // Metronome Mod
+      const moves = [new PokemonMove(MoveId.METRONOME)];
+      if (config.moveSet) {
+        moves.map(pm => (pm.ppUp = Math.min(3, config.moveSet!.length - 1)));
       }
+      enemyPokemon.moveset = moves;
+      enemyPokemon.summonData.moveset = moves;
 
       // Set tags
       if (config.tags && config.tags.length > 0) {
@@ -966,7 +968,13 @@ export function handleMysteryEncounterBattleStartEffects(): void {
     const effects = encounter.startOfBattleEffects;
     effects.forEach(effect => {
       const source = effect.sourcePokemon ?? globalScene.getField()[effect.sourceBattlerIndex ?? 0];
-      globalScene.phaseManager.pushNew("MovePhase", source, effect.targets, effect.move, effect.useMode);
+      globalScene.phaseManager.pushNew(
+        "MovePhase",
+        source,
+        effect.targets,
+        new PokemonMove(MoveId.METRONOME, effect.move.ppUsed, effect.move.ppUp, effect.move.maxPpOverride),
+        effect.useMode,
+      );
     });
 
     // Pseudo turn end phase to reset flinch states, Endure, etc.

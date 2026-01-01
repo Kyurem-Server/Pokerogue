@@ -5,7 +5,6 @@ import { getPokemonNameWithAffix } from "#app/messages";
 import Overrides from "#app/overrides";
 import { EvolutionItem, pokemonEvolutions } from "#balance/pokemon-evolutions";
 import { tmSpecies } from "#balance/tm-species-map";
-import { tmPoolTiers } from "#balance/tms";
 import { getBerryEffectDescription, getBerryName } from "#data/berry";
 import { getDailyEventSeedLuck } from "#data/daily-run";
 import { allMoves, modifierTypes } from "#data/data-lists";
@@ -1499,27 +1498,10 @@ class SpeciesStatBoosterModifierTypeGenerator extends ModifierTypeGenerator {
 
 class TmModifierTypeGenerator extends ModifierTypeGenerator {
   constructor(tier: ModifierTier) {
-    super((party: Pokemon[], pregenArgs?: any[]) => {
-      if (pregenArgs && pregenArgs.length === 1 && pregenArgs[0] in MoveId) {
-        return new TmModifierType(pregenArgs[0] as MoveId);
-      }
-      const partyMemberCompatibleTms = party.map(p => {
-        const previousLevelMoves = p.getLearnableLevelMoves();
-        return (p as PlayerPokemon).compatibleTms.filter(
-          tm => !p.moveset.find(m => m.moveId === tm) && !previousLevelMoves.find(lm => lm === tm),
-        );
-      });
-      const tierUniqueCompatibleTms = partyMemberCompatibleTms
-        .flat()
-        .filter(tm => tmPoolTiers[tm] === tier)
-        .filter(tm => !allMoves[tm].name.endsWith(" (N)"))
-        .filter((tm, i, array) => array.indexOf(tm) === i);
-      if (tierUniqueCompatibleTms.length === 0) {
-        return null;
-      }
-      // TODO: should this use `randSeedItem`?
-      const randTmIndex = randSeedInt(tierUniqueCompatibleTms.length);
-      return new TmModifierType(tierUniqueCompatibleTms[randTmIndex]);
+    super(() => {
+      const metronome = new TmModifierType(MoveId.METRONOME);
+      metronome.setTier(tier);
+      return metronome;
     });
   }
 }
@@ -2634,25 +2616,20 @@ export function getPlayerShopModifierTypeOptionsForWave(waveIndex: number, baseC
   const options = [
     [
       new ModifierTypeOption(modifierTypeInitObj.POTION(), 0, baseCost * 0.2),
-      new ModifierTypeOption(modifierTypeInitObj.ETHER(), 0, baseCost * 0.4),
       new ModifierTypeOption(modifierTypeInitObj.REVIVE(), 0, baseCost * 2),
     ],
     [
       new ModifierTypeOption(modifierTypeInitObj.SUPER_POTION(), 0, baseCost * 0.45),
       new ModifierTypeOption(modifierTypeInitObj.FULL_HEAL(), 0, baseCost),
     ],
-    [
-      new ModifierTypeOption(modifierTypeInitObj.ELIXIR(), 0, baseCost),
-      new ModifierTypeOption(modifierTypeInitObj.MAX_ETHER(), 0, baseCost),
-    ],
+    [new ModifierTypeOption(modifierTypeInitObj.PP_UP(), 0, baseCost)],
     [
       new ModifierTypeOption(modifierTypeInitObj.HYPER_POTION(), 0, baseCost * 0.8),
       new ModifierTypeOption(modifierTypeInitObj.MAX_REVIVE(), 0, baseCost * 2.75),
-      new ModifierTypeOption(modifierTypeInitObj.MEMORY_MUSHROOM(), 0, baseCost * 4),
     ],
     [
       new ModifierTypeOption(modifierTypeInitObj.MAX_POTION(), 0, baseCost * 1.5),
-      new ModifierTypeOption(modifierTypeInitObj.MAX_ELIXIR(), 0, baseCost * 2.5),
+      new ModifierTypeOption(modifierTypeInitObj.PP_MAX(), 0, baseCost * 2.5),
     ],
     [new ModifierTypeOption(modifierTypeInitObj.FULL_RESTORE(), 0, baseCost * 2.25)],
     [new ModifierTypeOption(modifierTypeInitObj.SACRED_ASH(), 0, baseCost * 10)],

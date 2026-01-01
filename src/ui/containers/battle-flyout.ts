@@ -155,18 +155,22 @@ export class BattleFlyout extends Phaser.GameObjects.Container {
   /** Updates all of the {@linkcode MoveInfo} objects in the moveInfo array */
   private onMoveUsed(event: Event) {
     const moveUsedEvent = event as MoveUsedEvent;
-    if (!moveUsedEvent || moveUsedEvent.pokemonId !== this.pokemon?.id || moveUsedEvent.move.id === MoveId.STRUGGLE) {
+    if (
+      !moveUsedEvent
+      || moveUsedEvent.pokemonId !== this.pokemon?.id
+      || moveUsedEvent.move.moveId === MoveId.STRUGGLE
+    ) {
       // Ignore Struggle
       return;
     }
 
-    const foundInfo = this.moveInfo.find(x => x?.move.id === moveUsedEvent.move.id);
+    const foundInfo = this.moveInfo.find(x => x?.move.id === moveUsedEvent.move.moveId);
     if (foundInfo) {
       foundInfo.ppUsed = moveUsedEvent.ppUsed;
     } else {
       this.moveInfo.push({
-        move: moveUsedEvent.move,
-        maxPp: moveUsedEvent.move.pp,
+        move: moveUsedEvent.move.getMove(),
+        maxPp: moveUsedEvent.move.getMovePp(),
         ppUsed: moveUsedEvent.ppUsed,
       });
     }

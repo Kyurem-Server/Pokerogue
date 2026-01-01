@@ -246,7 +246,7 @@ export const DancingLessonsEncounter: MysteryEncounter = MysteryEncounterBuilder
           globalScene.phaseManager.unshiftNew(
             "LearnMovePhase",
             globalScene.getPlayerParty().indexOf(pokemon),
-            MoveId.REVELATION_DANCE,
+            MoveId.METRONOME,
           );
 
           // Play animation again to "learn" the dance

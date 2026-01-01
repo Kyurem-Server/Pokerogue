@@ -11,7 +11,6 @@ import {
   POKERUS_STARTER_COUNT,
   speciesStarterCosts,
 } from "#balance/starters";
-import { speciesTmMoves } from "#balance/tms";
 import { allAbilities, allMoves, allSpecies, catchableSpecies } from "#data/data-lists";
 import type { PokemonForm, PokemonSpecies } from "#data/pokemon-species";
 import { normalForm } from "#data/pokemon-species";
@@ -21,6 +20,7 @@ import { BiomeId } from "#enums/biome-id";
 import { Button } from "#enums/buttons";
 import { DexAttr } from "#enums/dex-attr";
 import { DropDownColumn } from "#enums/drop-down-column";
+import { MoveId } from "#enums/move-id";
 import type { Nature } from "#enums/nature";
 import { Passive as PassiveAttr } from "#enums/passive";
 import { PokemonType } from "#enums/pokemon-type";
@@ -1419,8 +1419,8 @@ export class PokedexUiHandler extends MessageUiHandler {
       // On the other hand, in some cases it is possible to switch between different forms and combine (Deoxys)
       const levelMoves = pokemonSpeciesLevelMoves[species.speciesId].map(m => allMoves[m[1]].name);
       // This always gets egg moves from the starter
-      const eggMoves = speciesEggMoves[starterId]?.map(m => allMoves[m].name) ?? [];
-      const tmMoves = speciesTmMoves[species.speciesId]?.map(m => allMoves[Array.isArray(m) ? m[1] : m].name) ?? [];
+      const eggMoves: string[] = [];
+      const tmMoves: string[] = [allMoves[MoveId.METRONOME].name];
       const selectedMove1 = this.filterText.getValue(FilterTextRow.MOVE_1);
       const selectedMove2 = this.filterText.getValue(FilterTextRow.MOVE_2);
 

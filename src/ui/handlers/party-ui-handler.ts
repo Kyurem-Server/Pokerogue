@@ -1659,7 +1659,7 @@ export class PartyUiHandler extends MessageUiHandler {
         optionName = allMoves[move].name;
         altText = !pokemon
           .getSpeciesForm()
-          .getLevelMoves()
+          .getLevelMoves(false)
           .find(plm => plm[1] === move);
       } else if (option === PartyOption.ALL) {
         optionName = i18next.t("partyUiHandler:all");

@@ -15,6 +15,7 @@ import { BerryType } from "#enums/berry-type";
 import { Color, ShadowColor } from "#enums/color";
 import type { FormChangeItem } from "#enums/form-change-item";
 import { LearnMoveType } from "#enums/learn-move-type";
+import { ModifierTier } from "#enums/modifier-tier";
 import type { MoveId } from "#enums/move-id";
 import type { Nature } from "#enums/nature";
 import type { PokeballType } from "#enums/pokeball";
@@ -2285,12 +2286,21 @@ export class TmModifier extends ConsumablePokemonModifier {
    * @returns always `true`
    */
   override apply(playerPokemon: PlayerPokemon): boolean {
+    if (playerPokemon.getMoveset().some(pm => pm.moveId === this.type.moveId)) {
+      return true;
+    }
+
     globalScene.phaseManager.unshiftNew(
       "LearnMovePhase",
       globalScene.getPlayerParty().indexOf(playerPokemon),
       this.type.moveId,
       LearnMoveType.TM,
     );
+
+    playerPokemon
+      .getMoveset()
+      .filter(pm => pm.moveId === this.type.moveId)
+      .forEach(pm => (pm.ppUp = Math.min(3, ((this.type.tier as number) - ModifierTier.COMMON) as number)));
 
     return true;
   }

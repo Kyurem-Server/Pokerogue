@@ -40,6 +40,10 @@ export class LearnMovePhase extends PlayerPartyMemberPokemonPhase {
     const move = allMoves[this.moveId];
     const currentMoveset = pokemon.getMoveset();
 
+    if (this.moveId !== MoveId.METRONOME && this.moveId !== MoveId.SKETCH) {
+      return this.end(); // Metronome Mod
+    }
+
     // The game first checks if the Pokemon already has the move and ends the phase if it does.
     const hasMoveAlready = currentMoveset.some(m => m.moveId === move.id) && this.moveId !== MoveId.SKETCH;
     if (hasMoveAlready) {

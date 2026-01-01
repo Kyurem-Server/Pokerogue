@@ -3357,7 +3357,7 @@ export class BattleScene extends SceneBase {
           ) as TurnHeldItemTransferModifier;
           finalBossMBH.setTransferrableFalse();
           this.addEnemyModifier(finalBossMBH, false, true);
-          pokemon.generateAndPopulateMoveset(1);
+          pokemon.generateAndPopulateMoveset();
           this.setFieldScale(0.75);
           this.triggerPokemonFormChange(pokemon, SpeciesFormChangeManualTrigger, false);
           this.currentBattle.double = true;

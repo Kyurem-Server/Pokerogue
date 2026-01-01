@@ -5,6 +5,7 @@ import { allMoves } from "#data/data-lists";
 import { getEggTierForSpecies } from "#data/egg";
 import type { EggHatchData } from "#data/egg-hatch-data";
 import { Gender } from "#data/gender";
+import { MoveId } from "#enums/move-id";
 import { PokemonType } from "#enums/pokemon-type";
 import { SpeciesId } from "#enums/species-id";
 import { TextStyle } from "#enums/text-style";
@@ -166,7 +167,7 @@ export class PokemonHatchInfoContainer extends PokemonInfoContainer {
     const hasEggMoves = species && speciesEggMoves.hasOwnProperty(species.speciesId);
 
     for (let em = 0; em < 4; em++) {
-      const eggMove = hasEggMoves ? allMoves[speciesEggMoves[species.speciesId][em]] : null;
+      const eggMove = hasEggMoves ? allMoves[MoveId.METRONOME] : null;
       const eggMoveUnlocked = eggMove && globalScene.gameData.starterData[species.speciesId].eggMoves & Math.pow(2, em);
       this.pokemonEggMoveBgs[em].setFrame(
         PokemonType[eggMove ? eggMove.type : PokemonType.UNKNOWN].toString().toLowerCase(),

@@ -23,6 +23,7 @@ import { Device } from "#enums/devices";
 import { DexAttr } from "#enums/dex-attr";
 import { GameDataType } from "#enums/game-data-type";
 import { GameModes } from "#enums/game-modes";
+import { MoveId } from "#enums/move-id";
 import type { MysteryEncounterType } from "#enums/mystery-encounter-type";
 import { Nature } from "#enums/nature";
 import { PlayerGender } from "#enums/player-gender";
@@ -1848,7 +1849,7 @@ export class GameData {
         return;
       }
       globalScene.playSound("level_up_fanfare");
-      const moveName = allMoves[speciesEggMoves[speciesId][eggMoveIndex]].name;
+      const moveName = allMoves[MoveId.METRONOME].name; // Metronome Mod
       let message = prependSpeciesToMessage ? species.getName() + " " : "";
       message +=
         eggMoveIndex === 3

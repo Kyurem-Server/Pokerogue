@@ -761,7 +761,7 @@ export class MovePhase extends PokemonPhase {
       // "commit" to using the move, deducting PP.
       const ppUsed = 1 + this.getPpIncreaseFromPressure(this.getActiveTargetPokemon());
       move.usePp(ppUsed);
-      globalScene.eventTarget.dispatchEvent(new MoveUsedEvent(this.pokemon.id, move.getMove(), move.ppUsed));
+      globalScene.eventTarget.dispatchEvent(new MoveUsedEvent(this.pokemon.id, move, move.ppUsed));
     }
   }
 

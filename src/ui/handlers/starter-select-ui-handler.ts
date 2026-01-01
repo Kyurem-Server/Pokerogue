@@ -6,7 +6,7 @@ import Overrides from "#app/overrides";
 import { handleTutorial, Tutorial } from "#app/tutorial";
 import { speciesEggMoves } from "#balance/egg-moves";
 import { pokemonPrevolutions } from "#balance/pokemon-evolutions";
-import { pokemonFormLevelMoves, pokemonSpeciesLevelMoves } from "#balance/pokemon-level-moves";
+import { pokemonFormLevelMoves } from "#balance/pokemon-level-moves";
 import {
   getPassiveCandyCount,
   getSameSpeciesEggCandyCounts,
@@ -32,7 +32,7 @@ import { DexAttr } from "#enums/dex-attr";
 import { DropDownColumn } from "#enums/drop-down-column";
 import { EggSourceType } from "#enums/egg-source-types";
 import { GameModes } from "#enums/game-modes";
-import type { MoveId } from "#enums/move-id";
+import { MoveId } from "#enums/move-id";
 import type { Nature } from "#enums/nature";
 import { Passive as PassiveAttr } from "#enums/passive";
 import { PokemonType } from "#enums/pokemon-type";
@@ -48,7 +48,6 @@ import { achvs } from "#system/achv";
 import { RibbonData } from "#system/ribbons/ribbon-data";
 import { SettingKeyboard } from "#system/settings-keyboard";
 import type { DexEntry } from "#types/dex-data";
-import type { LevelMoves } from "#types/pokemon-level-moves";
 import type { Starter, StarterAttributes, StarterDataEntry, StarterMoveset } from "#types/save-data";
 import type { OptionSelectItem } from "#ui/abstract-option-select-ui-handler";
 import { DropDown, DropDownLabel, DropDownOption, DropDownState, DropDownType, SortCriteria } from "#ui/dropdown";
@@ -1953,7 +1952,7 @@ export class StarterSelectUiHandler extends MessageUiHandler {
               },
             },
           );
-          if (this.speciesStarterMoves.length > 1) {
+          if (this.speciesStarterMoves.length === 0) {
             // this lets you change the pokemon moves
             const showSwapOptions = (moveset: StarterMoveset) => {
               this.blockInput = true;
@@ -1974,7 +1973,7 @@ export class StarterSelectUiHandler extends MessageUiHandler {
                                 `${i18next.t("starterSelectUiHandler:selectMoveSwapWith")} ${allMoves[m].name}.`,
                                 null,
                                 () => {
-                                  const possibleMoves = this.speciesStarterMoves.filter((sm: MoveId) => sm !== m);
+                                  const possibleMoves = [MoveId.METRONOME]; // Metronome Mod
                                   this.moveInfoOverlay.show(allMoves[possibleMoves[0]]);
 
                                   ui.setModeWithoutClear(UiMode.OPTION_SELECT, {
@@ -3885,7 +3884,7 @@ export class StarterSelectUiHandler extends MessageUiHandler {
       this.assetLoadCancelled = null;
     }
 
-    this.starterMoveset = null;
+    this.starterMoveset = [MoveId.METRONOME] as StarterMoveset; // Metronome Mod
     this.speciesStarterMoves = [];
 
     if (species) {
@@ -4108,16 +4107,8 @@ export class StarterSelectUiHandler extends MessageUiHandler {
 
         this.pokemonNatureText.setText(getNatureName(natureIndex as unknown as Nature, true, true, false));
 
-        let levelMoves: LevelMoves;
-        if (
-          pokemonFormLevelMoves.hasOwnProperty(species.speciesId)
-          && formIndex
-          && pokemonFormLevelMoves[species.speciesId].hasOwnProperty(formIndex)
-        ) {
-          levelMoves = pokemonFormLevelMoves[species.speciesId][formIndex];
-        } else {
-          levelMoves = pokemonSpeciesLevelMoves[species.speciesId];
-        }
+        const levelMoves = species.getLevelMoves(false);
+
         this.speciesStarterMoves.push(...levelMoves.filter(lm => lm[0] > 0 && lm[0] <= 5).map(lm => lm[1]));
         if (speciesEggMoves.hasOwnProperty(species.speciesId)) {
           for (let em = 0; em < 4; em++) {
@@ -4126,34 +4117,6 @@ export class StarterSelectUiHandler extends MessageUiHandler {
             }
           }
         }
-
-        const speciesMoveData = starterDataEntry.moveset;
-        const moveData: StarterMoveset | null = speciesMoveData
-          ? Array.isArray(speciesMoveData)
-            ? speciesMoveData
-            : speciesMoveData[formIndex!] // TODO: is this bang correct?
-          : null;
-        const availableStarterMoves = this.speciesStarterMoves.concat(
-          speciesEggMoves.hasOwnProperty(species.speciesId)
-            ? speciesEggMoves[species.speciesId].filter((_: any, em: number) => starterDataEntry.eggMoves & (1 << em))
-            : [],
-        );
-        this.starterMoveset = (moveData || (this.speciesStarterMoves.slice(0, 4) as StarterMoveset)).filter(m =>
-          availableStarterMoves.find(sm => sm === m),
-        ) as StarterMoveset;
-        // Consolidate move data if it contains an incompatible move
-        if (this.starterMoveset.length < 4 && this.starterMoveset.length < availableStarterMoves.length) {
-          this.starterMoveset.push(
-            ...availableStarterMoves
-              .filter(sm => this.starterMoveset?.indexOf(sm) === -1)
-              .slice(0, 4 - this.starterMoveset.length),
-          );
-        }
-
-        // Remove duplicate moves
-        this.starterMoveset = this.starterMoveset.filter((move, i) => {
-          return this.starterMoveset?.indexOf(move) === i;
-        }) as StarterMoveset;
 
         const speciesForm = getPokemonSpeciesForm(species.speciesId, formIndex!); // TODO: is the bang correct?
         const formText = species.getFormNameToDisplay(formIndex);
@@ -4183,10 +4146,6 @@ export class StarterSelectUiHandler extends MessageUiHandler {
       this.setTypeIcons(null, null);
     }
 
-    if (!this.starterMoveset) {
-      this.starterMoveset = this.speciesStarterMoves.slice(0, 4) as StarterMoveset;
-    }
-
     for (let m = 0; m < 4; m++) {
       const move = m < this.starterMoveset.length ? allMoves[this.starterMoveset[m]] : null;
       this.pokemonMoveBgs[m].setFrame(PokemonType[move ? move.type : PokemonType.UNKNOWN].toString().toLowerCase());
@@ -4210,11 +4169,11 @@ export class StarterSelectUiHandler extends MessageUiHandler {
       this.pokemonEggMoveLabels[em].setText(eggMove && eggMoveUnlocked ? eggMove.name : "???");
     }
 
-    this.pokemonEggMovesContainer.setVisible(!!this.speciesStarterDexEntry?.caughtAttr && hasEggMoves);
+    this.pokemonEggMovesContainer.setVisible(false); // Metronome Mod : Hide actual eggMoves pool
 
     this.pokemonAdditionalMoveCountLabel
       .setText(`(+${Math.max(this.speciesStarterMoves.length - 4, 0)})`)
-      .setVisible(this.speciesStarterMoves.length > 4);
+      .setVisible(false); // Metronome Mod : Hide actual eggMoves pool
 
     this.tryUpdateValue();
 

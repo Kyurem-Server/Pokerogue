@@ -171,6 +171,9 @@ export class EncounterPhase extends BattlePhase {
 
       loadEnemyAssets.push(enemyPokemon.loadAssets());
 
+      // Metronome Mod: Revert all moves into MoveId.NONE, after TrainerConfigs and MysteryEncounterMode are applied
+      enemyPokemon.generateAndPopulateMoveset();
+
       const stats: string[] = [
         `HP: ${enemyPokemon.stats[0]} (${enemyPokemon.ivs[0]})`,
         ` Atk: ${enemyPokemon.stats[1]} (${enemyPokemon.ivs[1]})`,
@@ -181,7 +184,7 @@ export class EncounterPhase extends BattlePhase {
       ];
       const moveset: string[] = [];
       for (const move of enemyPokemon.getMoveset()) {
-        moveset.push(move.getName());
+        moveset.push(`${move.getName()} (PP: ${move.getMovePp()})`);
       }
 
       console.log(

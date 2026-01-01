@@ -4,7 +4,6 @@ import { pokemonEvolutions } from "#balance/pokemon-evolutions";
 import { modifierTypes } from "#data/data-lists";
 import { MAX_PER_TYPE_POKEBALLS } from "#data/pokeball";
 import { AbilityId } from "#enums/ability-id";
-import { BerryType } from "#enums/berry-type";
 import { ModifierTier } from "#enums/modifier-tier";
 import { MoveId } from "#enums/move-id";
 import { PokeballType } from "#enums/pokeball";
@@ -13,7 +12,6 @@ import { StatusEffect } from "#enums/status-effect";
 import { Unlockables } from "#enums/unlockables";
 import type { Pokemon } from "#field/pokemon";
 import {
-  BerryModifier,
   DoubleBattleChanceBoosterModifier,
   SpeciesCritBoosterModifier,
   TurnStatusEffectModifier,
@@ -87,48 +85,9 @@ function initCommonModifierPool() {
       },
       3,
     ),
-    new WeightedModifierType(
-      modifierTypes.ETHER,
-      (party: Pokemon[]) => {
-        const thresholdPartyMemberCount = Math.min(
-          party.filter(
-            p =>
-              p.hp
-              && !p.getHeldItems().some(m => m instanceof BerryModifier && m.berryType === BerryType.LEPPA)
-              && p
-                .getMoveset()
-                .filter(m => m.ppUsed && m.getMovePp() - m.ppUsed <= 5 && m.ppUsed > Math.floor(m.getMovePp() / 2))
-                .length > 0,
-          ).length,
-          3,
-        );
-        return thresholdPartyMemberCount * 3;
-      },
-      9,
-    ),
-    new WeightedModifierType(
-      modifierTypes.MAX_ETHER,
-      (party: Pokemon[]) => {
-        const thresholdPartyMemberCount = Math.min(
-          party.filter(
-            p =>
-              p.hp
-              && !p.getHeldItems().some(m => m instanceof BerryModifier && m.berryType === BerryType.LEPPA)
-              && p
-                .getMoveset()
-                .filter(m => m.ppUsed && m.getMovePp() - m.ppUsed <= 5 && m.ppUsed > Math.floor(m.getMovePp() / 2))
-                .length > 0,
-          ).length,
-          3,
-        );
-        return thresholdPartyMemberCount;
-      },
-      3,
-    ),
     new WeightedModifierType(modifierTypes.LURE, lureWeightFunc(10, 2)),
     new WeightedModifierType(modifierTypes.TEMP_STAT_STAGE_BOOSTER, 4),
     new WeightedModifierType(modifierTypes.BERRY, 2),
-    new WeightedModifierType(modifierTypes.TM_COMMON, 2),
   ].map(m => {
     m.setTier(ModifierTier.COMMON);
     return m;
@@ -234,44 +193,6 @@ function initGreatModifierPool() {
       },
       3,
     ),
-    new WeightedModifierType(
-      modifierTypes.ELIXIR,
-      (party: Pokemon[]) => {
-        const thresholdPartyMemberCount = Math.min(
-          party.filter(
-            p =>
-              p.hp
-              && !p.getHeldItems().some(m => m instanceof BerryModifier && m.berryType === BerryType.LEPPA)
-              && p
-                .getMoveset()
-                .filter(m => m.ppUsed && m.getMovePp() - m.ppUsed <= 5 && m.ppUsed > Math.floor(m.getMovePp() / 2))
-                .length > 0,
-          ).length,
-          3,
-        );
-        return thresholdPartyMemberCount * 3;
-      },
-      9,
-    ),
-    new WeightedModifierType(
-      modifierTypes.MAX_ELIXIR,
-      (party: Pokemon[]) => {
-        const thresholdPartyMemberCount = Math.min(
-          party.filter(
-            p =>
-              p.hp
-              && !p.getHeldItems().some(m => m instanceof BerryModifier && m.berryType === BerryType.LEPPA)
-              && p
-                .getMoveset()
-                .filter(m => m.ppUsed && m.getMovePp() - m.ppUsed <= 5 && m.ppUsed > Math.floor(m.getMovePp() / 2))
-                .length > 0,
-          ).length,
-          3,
-        );
-        return thresholdPartyMemberCount;
-      },
-      3,
-    ),
     new WeightedModifierType(modifierTypes.DIRE_HIT, 4),
     new WeightedModifierType(modifierTypes.SUPER_LURE, lureWeightFunc(15, 4)),
     new WeightedModifierType(modifierTypes.NUGGET, skipInLastClassicWaveOrDefault(5)),
@@ -289,20 +210,6 @@ function initGreatModifierPool() {
       2,
     ),
     new WeightedModifierType(modifierTypes.SOOTHE_BELL, 2),
-    new WeightedModifierType(modifierTypes.TM_GREAT, 3),
-    new WeightedModifierType(
-      modifierTypes.MEMORY_MUSHROOM,
-      (party: Pokemon[]) => {
-        if (!party.find(p => p.getLearnableLevelMoves().length)) {
-          return 0;
-        }
-        const highestPartyLevel = party
-          .map(p => p.level)
-          .reduce((highestLevel: number, level: number) => Math.max(highestLevel, level), 1);
-        return Math.min(Math.ceil(highestPartyLevel / 20), 4);
-      },
-      4,
-    ),
     new WeightedModifierType(modifierTypes.BASE_STAT_BOOSTER, 3),
     new WeightedModifierType(modifierTypes.TERA_SHARD, (party: Pokemon[]) =>
       party.filter(
@@ -543,7 +450,6 @@ function initUltraModifierPool() {
     new WeightedModifierType(modifierTypes.REVIVER_SEED, 4),
     new WeightedModifierType(modifierTypes.CANDY_JAR, skipInLastClassicWaveOrDefault(5)),
     new WeightedModifierType(modifierTypes.ATTACK_TYPE_BOOSTER, 9),
-    new WeightedModifierType(modifierTypes.TM_ULTRA, 11),
     new WeightedModifierType(modifierTypes.RARER_CANDY, 4),
     new WeightedModifierType(modifierTypes.GOLDEN_PUNCH, skipInLastClassicWaveOrDefault(2)),
     new WeightedModifierType(modifierTypes.IV_SCANNER, skipInLastClassicWaveOrDefault(4)),

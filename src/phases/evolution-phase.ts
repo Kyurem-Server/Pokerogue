@@ -1,12 +1,10 @@
 import type { AnySound } from "#app/battle-scene";
-import { EVOLVE_MOVE } from "#app/constants";
 import { globalScene } from "#app/global-scene";
 import { getPokemonNameWithAffix } from "#app/messages";
 import { Phase } from "#app/phase";
 import type { SpeciesFormEvolution } from "#balance/pokemon-evolutions";
 import { FusionSpeciesFormEvolution } from "#balance/pokemon-evolutions";
 import { getTypeRgb } from "#data/type";
-import { LearnMoveSituation } from "#enums/learn-move-situation";
 import { UiMode } from "#enums/ui-mode";
 import { cos, sin } from "#field/anims";
 import type { PlayerPokemon, Pokemon } from "#field/pokemon";
@@ -406,17 +404,6 @@ export class EvolutionPhase extends Phase {
   }
 
   private postEvolve(evolvedPokemon: Pokemon): void {
-    const learnSituation: LearnMoveSituation = this.fusionSpeciesEvolved
-      ? LearnMoveSituation.EVOLUTION_FUSED
-      : this.pokemon.fusionSpecies
-        ? LearnMoveSituation.EVOLUTION_FUSED_BASE
-        : LearnMoveSituation.EVOLUTION;
-    const levelMoves = this.pokemon
-      .getLevelMoves(this.lastLevel + 1, true, false, false, learnSituation)
-      .filter(lm => lm[0] === EVOLVE_MOVE);
-    for (const lm of levelMoves) {
-      globalScene.phaseManager.unshiftNew("LearnMovePhase", globalScene.getPlayerParty().indexOf(this.pokemon), lm[1]);
-    }
     globalScene.phaseManager.unshiftNew("EndEvolutionPhase");
 
     globalScene.playSound("se/shine");

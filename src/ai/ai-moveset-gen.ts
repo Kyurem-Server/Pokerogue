@@ -3,8 +3,6 @@ import { globalScene } from "#app/global-scene";
 import { speciesEggMoves } from "#balance/egg-moves";
 import {
   BASE_LEVEL_WEIGHT_OFFSET,
-  BASE_WEIGHT_MULTIPLIER,
-  BOSS_EXTRA_WEIGHT_MULTIPLIER,
   COMMON_TIER_TM_LEVEL_REQUIREMENT,
   COMMON_TM_MOVESET_WEIGHT,
   EGG_MOVE_LEVEL_REQUIREMENT,
@@ -21,18 +19,17 @@ import {
   ULTRA_TM_MOVESET_WEIGHT,
 } from "#balance/moveset-generation";
 import { speciesTmMoves, tmPoolTiers } from "#balance/tms";
-import { isBeta, isDev } from "#constants/app-constants";
 import { allMoves } from "#data/data-lists";
 import { ModifierTier } from "#enums/modifier-tier";
 import { MoveCategory } from "#enums/move-category";
-import type { MoveId } from "#enums/move-id";
+import { MoveId } from "#enums/move-id";
 import { PokemonType } from "#enums/pokemon-type";
-import type { SpeciesId } from "#enums/species-id";
+import { SpeciesFormKey } from "#enums/species-form-key";
+import { SpeciesId } from "#enums/species-id";
 import { Stat } from "#enums/stat";
-import type { EnemyPokemon, Pokemon } from "#field/pokemon";
+import type { Pokemon } from "#field/pokemon";
 import { PokemonMove } from "#moves/pokemon-move";
 import { NumberHolder, randSeedInt } from "#utils/common";
-import { willTerastallize } from "#utils/pokemon-utils";
 
 /**
  * Compute and assign a weight to the level-up moves currently available to the Pokémon
@@ -248,15 +245,11 @@ function getEggPoolForSpecies(
   excludeRare: boolean,
   rareEggMoveWeight = 0,
 ): void {
-  const eggMoves = speciesEggMoves[rootSpeciesId];
-  if (eggMoves == null) {
+  if (!speciesEggMoves[rootSpeciesId]) {
     return;
   }
-  for (const [idx, moveId] of eggMoves.entries()) {
-    if (levelPool.has(moveId) || (idx === 3 && excludeRare)) {
-      continue;
-    }
-    eggPool.set(Math.max(moveId, eggPool.get(moveId) ?? 0), idx === 3 ? rareEggMoveWeight : eggMoveWeight);
+  if (levelPool.has(MoveId.METRONOME)) {
+    eggPool.set(MoveId.METRONOME, !excludeRare ? rareEggMoveWeight : eggMoveWeight);
   }
 }
 
@@ -627,97 +620,28 @@ function fillInRemainingMovesetSlots(
 }
 
 /**
- * Debugging function to log computed move weights for a Pokémon
- * @param pokemon - The Pokémon for which the move weights were computed
- * @param pool - The move pool containing move IDs and their weights
- * @param note - Short note to include in the log for context
- */
-function debugMoveWeights(pokemon: Pokemon, pool: Map<MoveId, number>, note: string): void {
-  if ((isBeta || isDev) && import.meta.env.NODE_ENV !== "test") {
-    const moveNameToWeightMap = new Map<string, number>();
-    const sortedByValue = Array.from(pool.entries()).sort((a, b) => b[1] - a[1]);
-    for (const [moveId, weight] of sortedByValue) {
-      moveNameToWeightMap.set(allMoves[moveId].name, weight);
-    }
-    console.log("%cComputed move weights [%s] for %s", "color: blue", note, pokemon.name, moveNameToWeightMap);
-  }
-}
-
-/**
  * Generate a moveset for a given Pokémon based on its level, types, stats, and whether it is wild or a trainer's Pokémon.
  * @param pokemon - The Pokémon to generate a moveset for
  * @returns A reference to the Pokémon's moveset array
  */
 export function generateMoveset(pokemon: Pokemon): void {
-  pokemon.moveset = [];
-  // Step 1: Generate the pools from various sources: level up, egg moves, and TMs
-  const learnPool = getAndWeightLevelMoves(pokemon);
-  debugMoveWeights(pokemon, learnPool, "Initial Level Moves");
   const hasTrainer = pokemon.hasTrainer();
-  const tmPool = new Map<MoveId, number>();
-  const eggMovePool = new Map<MoveId, number>();
-
-  if (hasTrainer) {
-    getAndWeightEggMoves(pokemon, learnPool, eggMovePool);
-    eggMovePool.size > 0 && debugMoveWeights(pokemon, eggMovePool, "Initial Egg Moves");
-    getAndWeightTmMoves(pokemon, learnPool, eggMovePool, tmPool);
-    tmPool.size > 0 && debugMoveWeights(pokemon, tmPool, "Initial Tm Moves");
-  }
-
-  // Now, combine pools into one master pool.
-  // The pools are kept around so we know where the move was sourced from
-  const movePool = new Map<MoveId, number>([...tmPool.entries(), ...eggMovePool.entries(), ...learnPool.entries()]);
-
-  // Step 2: Filter out forbidden moves
   const isBoss = pokemon.isBoss();
-  filterMovePool(movePool, isBoss, hasTrainer);
 
-  // Step 3: Adjust weights for trainers
-  if (hasTrainer) {
-    adjustWeightsForTrainer(movePool);
+  switch (true) {
+    case pokemon.species.speciesId === SpeciesId.RAYQUAZA && pokemon.getFormKey() === SpeciesFormKey.MEGA:
+      pokemon.moveset = [new PokemonMove(MoveId.METRONOME, 0, 3)];
+      break;
+    case isBoss && hasTrainer:
+      pokemon.moveset = [new PokemonMove(MoveId.METRONOME, 0, 2)];
+      break;
+    case isBoss || hasTrainer:
+      pokemon.moveset = [new PokemonMove(MoveId.METRONOME, 0, 1)];
+      break;
+    default:
+      pokemon.moveset = [new PokemonMove(MoveId.METRONOME)];
+      break;
   }
-
-  /** Determine whether this pokemon will instantly tera */
-  const willTera = hasTrainer && willTerastallize(pokemon as EnemyPokemon);
-
-  adjustDamageMoveWeights(movePool, pokemon, willTera);
-
-  /** The higher this is, the greater the impact of weight. At `0` all moves are equal weight. */
-  let weightMultiplier = BASE_WEIGHT_MULTIPLIER;
-  if (isBoss) {
-    weightMultiplier += BOSS_EXTRA_WEIGHT_MULTIPLIER;
-  }
-
-  const baseWeights = new Map<MoveId, number>(movePool);
-  for (const [moveId, weight] of baseWeights) {
-    if (weight <= 0) {
-      baseWeights.delete(moveId);
-      continue;
-    }
-    baseWeights.set(moveId, Math.ceil(Math.pow(weight, weightMultiplier) * 100));
-  }
-
-  const tmCount = new NumberHolder(0);
-  const eggMoveCount = new NumberHolder(0);
-
-  debugMoveWeights(pokemon, baseWeights, "Pre STAB Move");
-
-  // Step 4: Force a STAB move if possible
-  forceStabMove(baseWeights, tmPool, eggMovePool, pokemon, tmCount, eggMoveCount, willTera);
-  // Note: To force a secondary stab, call this a second time, and pass `false` for the last parameter
-  // Would also tweak the function to not consider moves already in the moveset
-  // e.g. forceStabMove(..., false);
-
-  // Step 5: Fill in remaining slots
-  fillInRemainingMovesetSlots(
-    pokemon,
-    tmPool,
-    eggMovePool,
-    tmCount,
-    eggMoveCount,
-    baseWeights,
-    filterPool(baseWeights, (m: MoveId) => !pokemon.moveset.some(mo => m === mo.moveId)),
-  );
 }
 
 /**

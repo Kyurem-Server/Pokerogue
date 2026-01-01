@@ -7994,7 +7994,7 @@ export class ReducePpMoveAttr extends MoveEffectAttr {
     const lastPpUsed = movesetMove.ppUsed;
     movesetMove.ppUsed = Math.min(lastPpUsed + this.reduction, movesetMove.getMovePp());
 
-    globalScene.eventTarget.dispatchEvent(new MoveUsedEvent(target.id, movesetMove.getMove(), movesetMove.ppUsed));
+    globalScene.eventTarget.dispatchEvent(new MoveUsedEvent(target.id, movesetMove, movesetMove.ppUsed));
     globalScene.phaseManager.queueMessage(
       i18next.t("battle:ppReduced", {
         targetName: getPokemonNameWithAffix(target),
@@ -9454,7 +9454,7 @@ export function initMoves() {
     new AttackMove(MoveId.BIDE, PokemonType.NORMAL, MoveCategory.PHYSICAL, -1, -1, 10, -1, 1, 1)
       .target(MoveTarget.USER)
       .unimplemented(),
-    new SelfStatusMove(MoveId.METRONOME, PokemonType.NORMAL, -1, 10, -1, 0, 1) //
+    new SelfStatusMove(MoveId.METRONOME, PokemonType.NORMAL, -1, 40, -1, 0, 1) //
       .attr(RandomMoveAttr, invalidMetronomeMoves),
     new StatusMove(MoveId.MIRROR_MOVE, PokemonType.FLYING, -1, 20, -1, 0, 1) //
       .attr(CopyMoveAttr, true, invalidMirrorMoveMoves),

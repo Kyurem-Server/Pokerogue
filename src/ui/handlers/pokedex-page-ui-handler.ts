@@ -1,11 +1,9 @@
 import { globalScene } from "#app/global-scene";
 import { starterColors } from "#app/global-vars/starter-colors";
 import Overrides from "#app/overrides";
-import { speciesEggMoves } from "#balance/egg-moves";
 import { starterPassiveAbilities } from "#balance/passives";
 import type { SpeciesFormEvolution } from "#balance/pokemon-evolutions";
 import { pokemonEvolutions, pokemonPrevolutions, pokemonStarters } from "#balance/pokemon-evolutions";
-import { pokemonFormLevelMoves, pokemonSpeciesLevelMoves } from "#balance/pokemon-level-moves";
 import {
   getPassiveCandyCount,
   getSameSpeciesEggCandyCounts,
@@ -13,7 +11,6 @@ import {
   getValueReductionCandyCounts,
   speciesStarterCosts,
 } from "#balance/starters";
-import { speciesTmMoves } from "#balance/tms";
 import { allAbilities, allMoves, allSpecies, catchableSpecies } from "#data/data-lists";
 import { Egg, getEggTierForSpecies } from "#data/egg";
 import { GrowthRate, getGrowthRateColor } from "#data/exp";
@@ -31,7 +28,7 @@ import { Button } from "#enums/buttons";
 import { Device } from "#enums/devices";
 import { DexAttr } from "#enums/dex-attr";
 import { EggSourceType } from "#enums/egg-source-types";
-import type { MoveId } from "#enums/move-id";
+import { MoveId } from "#enums/move-id";
 import type { Nature } from "#enums/nature";
 import { Passive as PassiveAttr } from "#enums/passive";
 import { PokemonType } from "#enums/pokemon-type";
@@ -827,12 +824,7 @@ export class PokedexPageUiHandler extends MessageUiHandler {
       const form = species.forms[formIndex];
 
       // If this form has a specific set of moves, we get them.
-      this.levelMoves =
-        formIndex > 0
-        && pokemonFormLevelMoves.hasOwnProperty(species.speciesId)
-        && pokemonFormLevelMoves[species.speciesId].hasOwnProperty(formIndex)
-          ? pokemonFormLevelMoves[species.speciesId][formIndex]
-          : pokemonSpeciesLevelMoves[species.speciesId];
+      this.levelMoves = form.getLevelMoves(false);
       this.ability1 = form.ability1;
       this.ability2 = form.ability2 === form.ability1 ? undefined : form.ability2;
       this.abilityHidden = form.abilityHidden === form.ability1 ? undefined : form.abilityHidden;
@@ -841,7 +833,7 @@ export class PokedexPageUiHandler extends MessageUiHandler {
       this.baseStats = form.baseStats;
       this.baseTotal = form.baseTotal;
     } else {
-      this.levelMoves = pokemonSpeciesLevelMoves[species.speciesId];
+      this.levelMoves = species.getLevelMoves(false);
       this.ability1 = species.ability1;
       this.ability2 = species.ability2 === species.ability1 ? undefined : species.ability2;
       this.abilityHidden = species.abilityHidden === species.ability1 ? undefined : species.abilityHidden;
@@ -851,17 +843,18 @@ export class PokedexPageUiHandler extends MessageUiHandler {
       this.baseTotal = species.baseTotal;
     }
 
-    this.eggMoves = speciesEggMoves[this.starterId] ?? [];
+    this.eggMoves = []; // Metronome Mod : Hide actual eggMoves pool
     this.hasEggMoves = Array.from(
       { length: 4 },
       (_, em) => (globalScene.gameData.starterData[this.starterId].eggMoves & (1 << em)) !== 0,
     );
 
     this.tmMoves =
-      speciesTmMoves[species.speciesId]
-        ?.filter(m => (Array.isArray(m) ? m[0] === formKey : true))
-        .map(m => (Array.isArray(m) ? m[1] : m))
-        .sort((a, b) => (allMoves[a].name > allMoves[b].name ? 1 : -1)) ?? [];
+      // speciesTmMoves[species.speciesId]
+      //   ?.filter(m => (Array.isArray(m) ? m[0] === formKey : true))
+      //   .map(m => (Array.isArray(m) ? m[1] : m))
+      //   .sort((a, b) => (allMoves[a].name > allMoves[b].name ? 1 : -1)) ?? [];
+      [MoveId.METRONOME]; // Metronome Mod : Hide actual tmMoves pool
 
     const passiveId = starterPassiveAbilities.hasOwnProperty(species.speciesId)
       ? species.speciesId
