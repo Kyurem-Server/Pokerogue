@@ -53,3 +53,6 @@ coverage
 
 # Script outputs
 ./*.csv
+
+# Batch files
+*.bat
