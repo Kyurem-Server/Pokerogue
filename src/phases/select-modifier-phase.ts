@@ -274,11 +274,9 @@ export class SelectModifierPhase extends BattlePhase {
       globalScene.phaseManager.unshiftPhase(this.copy());
     }
 
-    if (modifier.type instanceof FusePokemonModifierType) {
-      if (result) {
-        globalScene.playSound("se/buy");
-        globalScene.phaseManager.appendToPhase(this.copy(), "LearnMovePhase");
-      }
+    if (result && modifier.type instanceof FusePokemonModifierType) {
+      globalScene.playSound("se/buy");
+      globalScene.phaseManager.unshiftPhase(this.copy());
     }
 
     if (cost !== -1 && !(modifier.type instanceof RememberMoveModifierType)) {

@@ -10,7 +10,11 @@ import { TextStyle } from "#enums/text-style";
 import { UiMode } from "#enums/ui-mode";
 import { HealShopCostModifier, LockModifierTiersModifier, PokemonHeldItemModifier } from "#modifiers/modifier";
 import type { ModifierTypeOption } from "#modifiers/modifier-type";
-import { getPlayerShopModifierTypeOptionsForWave, TmModifierType } from "#modifiers/modifier-type";
+import {
+  FusePokemonModifierType,
+  getPlayerShopModifierTypeOptionsForWave,
+  TmModifierType,
+} from "#modifiers/modifier-type";
 import type { ModifierSelectCallback } from "#phases/select-modifier-phase";
 import { AwaitableUiHandler } from "#ui/awaitable-ui-handler";
 import { MoveInfoOverlay } from "#ui/move-info-overlay";
@@ -812,7 +816,7 @@ class ModifierOption extends Phaser.GameObjects.Container {
     this.item = getItem();
     this.itemContainer.add(this.item);
 
-    if (!this.modifierTypeOption.cost) {
+    if (!this.modifierTypeOption.cost && !(this.modifierTypeOption.type instanceof FusePokemonModifierType)) {
       this.itemTint = getItem();
       this.itemTint.setTintFill(Phaser.Display.Color.GetColor(255, 192, 255));
       this.itemContainer.add(this.itemTint);
