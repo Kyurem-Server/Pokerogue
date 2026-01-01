@@ -1,9 +1,8 @@
 import type { UiMode } from "#enums/ui-mode";
-import AbstractSettingsUiHandler from "./abstract-settings-ui-handler";
-import { SettingKeys, SettingType } from "#app/system/settings/settings";
-("#app/inputs-controller");
+import { SettingKeys, SettingType } from "#system/settings";
+import { AbstractSettingsUiHandler } from "#ui/abstract-settings-ui-handler";
 
-export default class SettingsDisplayUiHandler extends AbstractSettingsUiHandler {
+export class SettingsDisplayUiHandler extends AbstractSettingsUiHandler {
   /**
    * Creates an instance of SettingsGamepadUiHandler.
    *
@@ -33,7 +32,7 @@ export default class SettingsDisplayUiHandler extends AbstractSettingsUiHandler 
             label: "Español (ES)",
           };
           break;
-        case "es-MX":
+        case "es-419":
           this.settings[languageIndex].options[0] = {
             value: "Español (LATAM)",
             label: "Español (LATAM)",
@@ -76,13 +75,13 @@ export default class SettingsDisplayUiHandler extends AbstractSettingsUiHandler 
             label: "日本語",
           };
           break;
-        case "zh-CN":
+        case "zh-Hans":
           this.settings[languageIndex].options[0] = {
             value: "简体中文",
             label: "简体中文",
           };
           break;
-        case "zh-TW":
+        case "zh-Hant":
           this.settings[languageIndex].options[0] = {
             value: "繁體中文",
             label: "繁體中文",
@@ -106,16 +105,40 @@ export default class SettingsDisplayUiHandler extends AbstractSettingsUiHandler 
             label: "Русский (Needs Help)",
           };
           break;
+        case "id":
+          this.settings[languageIndex].options[0] = {
+            value: "Bahasa Indonesia",
+            label: "Bahasa Indonesia (Needs Help)",
+          };
+          break;
+        case "hi":
+          this.settings[languageIndex].options[0] = {
+            value: "हिन्दी",
+            label: "हिन्दी (Needs Help)",
+          };
+          break;
         case "da":
           this.settings[languageIndex].options[0] = {
             value: "Dansk",
             label: "Dansk (Needs Help)",
           };
           break;
+        case "nb-NO":
+          this.settings[languageIndex].options[0] = {
+            value: "Norsk bokmål",
+            label: "Norsk bokmål (Needs Help)",
+          };
+          break;
         case "ro":
           this.settings[languageIndex].options[0] = {
             value: "Română",
             label: "Română (Needs Help)",
+          };
+          break;
+        case "tl":
+          this.settings[languageIndex].options[0] = {
+            value: "Tagalog",
+            label: "Tagalog (Needs Help)",
           };
           break;
         default:

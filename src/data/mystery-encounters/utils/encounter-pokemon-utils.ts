@@ -1,42 +1,44 @@
+import { timedEventManager } from "#app/global-event-manager";
 import { globalScene } from "#app/global-scene";
-import i18next from "i18next";
-import { isNullOrUndefined, randSeedInt } from "#app/utils/common";
-import { PokemonHeldItemModifier } from "#app/modifier/modifier";
-import type { EnemyPokemon, PlayerPokemon } from "#app/field/pokemon";
-import type Pokemon from "#app/field/pokemon";
+import { getPokemonNameWithAffix } from "#app/messages";
+import { speciesStarterCosts } from "#balance/starters";
+import { modifierTypes } from "#data/data-lists";
+import { Gender } from "#data/gender";
 import {
   doPokeballBounceAnim,
   getPokeballAtlasKey,
   getPokeballCatchMultiplier,
   getPokeballTintColor,
-} from "#app/data/pokeball";
+} from "#data/pokeball";
+import { CustomPokemonData } from "#data/pokemon-data";
+import type { PokemonSpecies } from "#data/pokemon-species";
+import { getStatusEffectCatchRateMultiplier } from "#data/status-effect";
+import type { AbilityId } from "#enums/ability-id";
+import { ChallengeType } from "#enums/challenge-type";
 import { PlayerGender } from "#enums/player-gender";
-import { addPokeballCaptureStars, addPokeballOpenParticles } from "#app/field/anims";
-import { getStatusEffectCatchRateMultiplier } from "#app/data/status-effect";
-import { achvs } from "#app/system/achv";
-import { UiMode } from "#enums/ui-mode";
-import type { PartyOption } from "#app/ui/party-ui-handler";
-import { PartyUiMode } from "#app/ui/party-ui-handler";
-import { SpeciesId } from "#enums/species-id";
+import type { PokeballType } from "#enums/pokeball";
 import type { PokemonType } from "#enums/pokemon-type";
-import type PokemonSpecies from "#app/data/pokemon-species";
-import { getPokemonSpecies } from "#app/utils/pokemon-utils";
-import { speciesStarterCosts } from "#app/data/balance/starters";
+import { SpeciesId } from "#enums/species-id";
+import type { PermanentStat } from "#enums/stat";
+import { StatusEffect } from "#enums/status-effect";
+import { UiMode } from "#enums/ui-mode";
+import { addPokeballCaptureStars, addPokeballOpenParticles } from "#field/anims";
+import type { EnemyPokemon, PlayerPokemon, Pokemon } from "#field/pokemon";
+import { PokemonHeldItemModifier } from "#modifiers/modifier";
+import type { PokemonHeldItemModifierType } from "#modifiers/modifier-type";
 import {
   getEncounterText,
   queueEncounterMessage,
   showEncounterText,
-} from "#app/data/mystery-encounters/utils/encounter-dialogue-utils";
-import { getPokemonNameWithAffix } from "#app/messages";
-import type { PokemonHeldItemModifierType } from "#app/modifier/modifier-type";
-import { modifierTypes } from "#app/data/data-lists";
-import { Gender } from "#app/data/gender";
-import type { PermanentStat } from "#enums/stat";
-import { SummaryUiMode } from "#app/ui/summary-ui-handler";
-import { CustomPokemonData } from "#app/data/pokemon/pokemon-data";
-import type { AbilityId } from "#enums/ability-id";
-import type { PokeballType } from "#enums/pokeball";
-import { StatusEffect } from "#enums/status-effect";
+} from "#mystery-encounters/encounter-dialogue-utils";
+import { achvs } from "#system/achv";
+import type { PartyOption } from "#ui/party-ui-handler";
+import { PartyUiMode } from "#ui/party-ui-handler";
+import { SummaryUiMode } from "#ui/summary-ui-handler";
+import { applyChallenges } from "#utils/challenge-utils";
+import { BooleanHolder, randSeedInt } from "#utils/common";
+import { getPokemonSpecies } from "#utils/pokemon-utils";
+import i18next from "i18next";
 
 /** Will give +1 level every 10 waves */
 export const STANDARD_ENCOUNTER_BOOSTED_LEVEL_MODIFIER = 1;
@@ -111,20 +113,24 @@ export function getRandomPlayerPokemon(
     // If there is only 1 legal/unfainted mon left, select from fainted legal mons
     const faintedLegalMons = party.filter(p => (!isAllowed || p.isAllowedInChallenge()) && p.isFainted());
     if (faintedLegalMons.length > 0) {
+      // TODO: should this use `randSeedItem`?
       chosenIndex = randSeedInt(faintedLegalMons.length);
       chosenPokemon = faintedLegalMons[chosenIndex];
     }
   }
   if (!chosenPokemon && fullyLegalMons.length > 0) {
+    // TODO: should this use `randSeedItem`?
     chosenIndex = randSeedInt(fullyLegalMons.length);
     chosenPokemon = fullyLegalMons[chosenIndex];
   }
   if (!chosenPokemon && isAllowed && allowedOnlyMons.length > 0) {
+    // TODO: should this use `randSeedItem`?
     chosenIndex = randSeedInt(allowedOnlyMons.length);
     chosenPokemon = allowedOnlyMons[chosenIndex];
   }
   if (!chosenPokemon) {
     // If no other options worked, returns fully random
+    // TODO: should this use `randSeedItem`?
     chosenIndex = randSeedInt(party.length);
     chosenPokemon = party[chosenIndex];
   }
@@ -260,18 +266,18 @@ export function getRandomSpeciesByStarterCost(
     .filter(s => {
       const pokemonSpecies = getPokemonSpecies(s[0]);
       return (
-        pokemonSpecies &&
-        (!excludedSpecies || !excludedSpecies.includes(s[0])) &&
-        (allowSubLegendary || !pokemonSpecies.subLegendary) &&
-        (allowLegendary || !pokemonSpecies.legendary) &&
-        (allowMythical || !pokemonSpecies.mythical)
+        pokemonSpecies
+        && (!excludedSpecies || !excludedSpecies.includes(s[0]))
+        && (allowSubLegendary || !pokemonSpecies.subLegendary)
+        && (allowLegendary || !pokemonSpecies.legendary)
+        && (allowMythical || !pokemonSpecies.mythical)
       );
     })
     .map(s => [getPokemonSpecies(s[0]), s[1]]);
 
   if (types && types.length > 0) {
     filteredSpecies = filteredSpecies.filter(
-      s => types.includes(s[0].type1) || (!isNullOrUndefined(s[0].type2) && types.includes(s[0].type2)),
+      s => types.includes(s[0].type1) || (s[0].type2 != null && types.includes(s[0].type2)),
     );
   }
 
@@ -304,7 +310,7 @@ export function getRandomSpeciesByStarterCost(
  */
 export function koPlayerPokemon(pokemon: PlayerPokemon) {
   pokemon.hp = 0;
-  pokemon.trySetStatus(StatusEffect.FAINT);
+  pokemon.doSetStatus(StatusEffect.FAINT);
   pokemon.updateInfo();
   queueEncounterMessage(
     i18next.t("battle:fainted", {
@@ -403,12 +409,12 @@ export async function applyModifierTypeToPlayerPokemon(
   // Check if the Pokemon has max stacks of that item already
   const modifier = modType.newModifier(pokemon);
   const existing = globalScene.findModifier(
-    m =>
-      m instanceof PokemonHeldItemModifier &&
-      m.type.id === modType.id &&
-      m.pokemonId === pokemon.id &&
-      m.matchType(modifier),
-  ) as PokemonHeldItemModifier;
+    (m): m is PokemonHeldItemModifier =>
+      m instanceof PokemonHeldItemModifier
+      && m.type.id === modType.id
+      && m.pokemonId === pokemon.id
+      && m.matchType(modifier),
+  ) as PokemonHeldItemModifier | undefined;
 
   // At max stacks
   if (existing && existing.getStackCount() >= existing.getMaxStackCount()) {
@@ -447,7 +453,8 @@ export function trainerThrowPokeball(
     const catchRate = pokemon.species.catchRate;
     const pokeballMultiplier = getPokeballCatchMultiplier(pokeballType);
     const statusMultiplier = pokemon.status ? getStatusEffectCatchRateMultiplier(pokemon.status.effect) : 1;
-    const x = Math.round((((_3m - _2h) * catchRate * pokeballMultiplier) / _3m) * statusMultiplier);
+    const shinyMultiplier = pokemon.isShiny() ? timedEventManager.getShinyCatchMultiplier() : 1;
+    const x = Math.round((((_3m - _2h) * catchRate * pokeballMultiplier) / _3m) * statusMultiplier * shinyMultiplier);
     ballTwitchRate = Math.round(65536 / Math.sqrt(Math.sqrt(255 / x)));
   }
 
@@ -518,7 +525,7 @@ export function trainerThrowPokeball(
                   repeatDelay: 500,
                   onUpdate: t => {
                     if (shakeCount && shakeCount < 4) {
-                      const value = t.getValue();
+                      const value = t.getValue() ?? 0;
                       const directionMultiplier = shakeCount % 2 === 1 ? 1 : -1;
                       pokeball.setX(pbX + value * 4 * directionMultiplier);
                       pokeball.setAngle(value * 27.5 * directionMultiplier);
@@ -645,8 +652,8 @@ export async function catchPokemon(
   const speciesForm = !pokemon.fusionSpecies ? pokemon.getSpeciesForm() : pokemon.getFusionSpeciesForm();
 
   if (
-    speciesForm.abilityHidden &&
-    (pokemon.fusionSpecies ? pokemon.fusionAbilityIndex : pokemon.abilityIndex) === speciesForm.getAbilityCount() - 1
+    speciesForm.abilityHidden
+    && (pokemon.fusionSpecies ? pokemon.fusionAbilityIndex : pokemon.abilityIndex) === speciesForm.getAbilityCount() - 1
   ) {
     globalScene.validateAchv(achvs.HIDDEN_ABILITY);
   }
@@ -668,6 +675,8 @@ export async function catchPokemon(
   globalScene.gameData.updateSpeciesDexIvs(pokemon.species.getRootSpeciesId(true), pokemon.ivs);
 
   return new Promise(resolve => {
+    const addStatus = new BooleanHolder(true);
+    applyChallenges(ChallengeType.POKEMON_ADD_TO_PARTY, pokemon, addStatus);
     const doPokemonCatchMenu = () => {
       const end = () => {
         // Ensure the pokemon is in the enemy party in all situations
@@ -703,6 +712,11 @@ export async function catchPokemon(
         });
       };
       Promise.all([pokemon.hideInfo(), globalScene.gameData.setPokemonCaught(pokemon)]).then(() => {
+        if (!(isObtain || addStatus.value)) {
+          removePokemon();
+          end();
+          return;
+        }
         if (globalScene.getPlayerParty().length === 6) {
           const promptRelease = () => {
             globalScene.ui.showText(
@@ -795,10 +809,16 @@ export async function catchPokemon(
     };
 
     if (showCatchObtainMessage) {
+      let catchMessage: string;
+      if (isObtain) {
+        catchMessage = "battle:pokemonObtained";
+      } else if (addStatus.value) {
+        catchMessage = "battle:pokemonCaught";
+      } else {
+        catchMessage = "battle:pokemonCaughtButChallenge";
+      }
       globalScene.ui.showText(
-        i18next.t(isObtain ? "battle:pokemonObtained" : "battle:pokemonCaught", {
-          pokemonName: pokemon.getNameToRender(),
-        }),
+        i18next.t(catchMessage, { pokemonName: pokemon.getNameToRender() }),
         null,
         doPokemonCatchMenu,
         0,
@@ -945,7 +965,7 @@ export function getGoldenBugNetSpecies(level: number): PokemonSpecies {
     w += speciesWeightPair[1];
     if (roll < w) {
       const initialSpecies = getPokemonSpecies(speciesWeightPair[0]);
-      return getPokemonSpecies(initialSpecies.getSpeciesForLevel(level, true));
+      return getPokemonSpecies(initialSpecies.getWildSpeciesForLevel(level, true, false, globalScene.gameMode));
     }
   }
 
@@ -970,8 +990,8 @@ export async function addPokemonDataToDexAndValidateAchievements(pokemon: Player
   const speciesForm = !pokemon.fusionSpecies ? pokemon.getSpeciesForm() : pokemon.getFusionSpeciesForm();
 
   if (
-    speciesForm.abilityHidden &&
-    (pokemon.fusionSpecies ? pokemon.fusionAbilityIndex : pokemon.abilityIndex) === speciesForm.getAbilityCount() - 1
+    speciesForm.abilityHidden
+    && (pokemon.fusionSpecies ? pokemon.fusionAbilityIndex : pokemon.abilityIndex) === speciesForm.getAbilityCount() - 1
   ) {
     globalScene.validateAchv(achvs.HIDDEN_ABILITY);
   }

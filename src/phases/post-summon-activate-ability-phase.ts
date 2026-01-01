@@ -1,13 +1,13 @@
-import { applyAbAttrs } from "#app/data/abilities/apply-ab-attrs";
-import { PostSummonPhase } from "#app/phases/post-summon-phase";
+import { applyAbAttrs } from "#abilities/apply-ab-attrs";
 import type { BattlerIndex } from "#enums/battler-index";
+import { PostSummonPhase } from "#phases/post-summon-phase";
 
 /**
  * Helper to {@linkcode PostSummonPhase} which applies abilities
  */
 export class PostSummonActivateAbilityPhase extends PostSummonPhase {
-  private priority: number;
-  private passive: boolean;
+  private readonly priority: number;
+  private readonly passive: boolean;
 
   constructor(battlerIndex: BattlerIndex, priority: number, passive: boolean) {
     super(battlerIndex);

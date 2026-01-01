@@ -1,37 +1,35 @@
-import type BattleScene from "#app/battle-scene";
-import * as BattleAnims from "#app/data/battle-anims";
-import { TrashToTreasureEncounter } from "#app/data/mystery-encounters/encounters/trash-to-treasure-encounter";
-import * as MysteryEncounters from "#app/data/mystery-encounters/mystery-encounters";
-import * as EncounterPhaseUtils from "#app/data/mystery-encounters/utils/encounter-phase-utils";
+import type { BattleScene } from "#app/battle-scene";
+import * as BattleAnims from "#data/battle-anims";
+import { modifierTypes } from "#data/data-lists";
+import { BiomeId } from "#enums/biome-id";
+import { ModifierTier } from "#enums/modifier-tier";
+import { MoveId } from "#enums/move-id";
+import { MysteryEncounterOptionMode } from "#enums/mystery-encounter-option-mode";
+import { MysteryEncounterTier } from "#enums/mystery-encounter-tier";
+import { MysteryEncounterType } from "#enums/mystery-encounter-type";
+import { SpeciesId } from "#enums/species-id";
+import { UiMode } from "#enums/ui-mode";
+import { HealShopCostModifier, HitHealModifier, TurnHealModifier } from "#modifiers/modifier";
+import type { PokemonHeldItemModifierType } from "#modifiers/modifier-type";
+import { PokemonMove } from "#moves/pokemon-move";
+import * as EncounterPhaseUtils from "#mystery-encounters/encounter-phase-utils";
 import {
   type EnemyPartyConfig,
   type EnemyPokemonConfig,
   generateModifierType,
-} from "#app/data/mystery-encounters/utils/encounter-phase-utils";
-import { getPokemonSpecies } from "#app/utils/pokemon-utils";
-import { BiomeId } from "#enums/biome-id";
-import { MysteryEncounterType } from "#app/enums/mystery-encounter-type";
-import { SpeciesId } from "#enums/species-id";
-import { PokemonMove } from "#app/data/moves/pokemon-move";
-import { HealShopCostModifier, HitHealModifier, TurnHealModifier } from "#app/modifier/modifier";
-import { ModifierTier } from "#enums/modifier-tier";
-import type { PokemonHeldItemModifierType } from "#app/modifier/modifier-type";
-import { modifierTypes } from "#app/data/data-lists";
-import { CommandPhase } from "#app/phases/command-phase";
-import { MovePhase } from "#app/phases/move-phase";
-import { SelectModifierPhase } from "#app/phases/select-modifier-phase";
-import ModifierSelectUiHandler from "#app/ui/modifier-select-ui-handler";
-import { UiMode } from "#enums/ui-mode";
-import * as Utils from "#app/utils/common";
-import { MoveId } from "#enums/move-id";
-import { MysteryEncounterOptionMode } from "#enums/mystery-encounter-option-mode";
-import { MysteryEncounterTier } from "#enums/mystery-encounter-tier";
+} from "#mystery-encounters/encounter-phase-utils";
+import * as MysteryEncounters from "#mystery-encounters/mystery-encounters";
+import { TrashToTreasureEncounter } from "#mystery-encounters/trash-to-treasure-encounter";
+import { MovePhase } from "#phases/move-phase";
 import {
   runMysteryEncounterToEnd,
   skipBattleRunMysteryEncounterRewardsPhase,
 } from "#test/mystery-encounter/encounter-test-utils";
-import GameManager from "#test/testUtils/gameManager";
-import { initSceneWithoutEncounterPhase } from "#test/testUtils/gameManagerUtils";
+import { GameManager } from "#test/test-utils/game-manager";
+import { initSceneWithoutEncounterPhase } from "#test/test-utils/game-manager-utils";
+import { ModifierSelectUiHandler } from "#ui/modifier-select-ui-handler";
+import * as Utils from "#utils/common";
+import { getPokemonSpecies } from "#utils/pokemon-utils";
 import { afterEach, beforeAll, beforeEach, describe, expect, it, vi } from "vitest";
 
 const namespace = "mysteryEncounters/trashToTreasure";
@@ -153,7 +151,7 @@ describe("Trash to Treasure - Mystery Encounter", () => {
     expect(onInitResult).toBe(true);
   });
 
-  describe("Option 1 - Dig for Valuables", () => {
+  describe("Option 1 - Battle Garbodor", () => {
     it("should have the correct properties", () => {
       const option1 = TrashToTreasureEncounter.options[0];
       expect(option1.optionMode).toBe(MysteryEncounterOptionMode.DEFAULT);
@@ -169,59 +167,14 @@ describe("Trash to Treasure - Mystery Encounter", () => {
       });
     });
 
-    it("should give 2 Leftovers, 1 Shell Bell, and Black Sludge", async () => {
-      await game.runToMysteryEncounter(MysteryEncounterType.TRASH_TO_TREASURE, defaultParty);
-      await runMysteryEncounterToEnd(game, 1);
-      await game.phaseInterceptor.to(SelectModifierPhase, false);
-      expect(scene.phaseManager.getCurrentPhase()?.constructor.name).toBe(SelectModifierPhase.name);
-
-      const leftovers = scene.findModifier(m => m instanceof TurnHealModifier) as TurnHealModifier;
-      expect(leftovers).toBeDefined();
-      expect(leftovers?.stackCount).toBe(2);
-
-      const shellBell = scene.findModifier(m => m instanceof HitHealModifier) as HitHealModifier;
-      expect(shellBell).toBeDefined();
-      expect(shellBell?.stackCount).toBe(1);
-
-      const blackSludge = scene.findModifier(m => m instanceof HealShopCostModifier) as HealShopCostModifier;
-      expect(blackSludge).toBeDefined();
-      expect(blackSludge?.stackCount).toBe(1);
-    });
-
-    it("should leave encounter without battle", async () => {
-      const leaveEncounterWithoutBattleSpy = vi.spyOn(EncounterPhaseUtils, "leaveEncounterWithoutBattle");
-
-      await game.runToMysteryEncounter(MysteryEncounterType.TRASH_TO_TREASURE, defaultParty);
-      await runMysteryEncounterToEnd(game, 1);
-
-      expect(leaveEncounterWithoutBattleSpy).toBeCalled();
-    });
-  });
-
-  describe("Option 2 - Battle Garbodor", () => {
-    it("should have the correct properties", () => {
-      const option1 = TrashToTreasureEncounter.options[1];
-      expect(option1.optionMode).toBe(MysteryEncounterOptionMode.DEFAULT);
-      expect(option1.dialogue).toBeDefined();
-      expect(option1.dialogue).toStrictEqual({
-        buttonLabel: `${namespace}:option.2.label`,
-        buttonTooltip: `${namespace}:option.2.tooltip`,
-        selected: [
-          {
-            text: `${namespace}:option.2.selected`,
-          },
-        ],
-      });
-    });
-
     it("should start battle against Garbodor", async () => {
       const phaseSpy = vi.spyOn(scene.phaseManager, "pushPhase");
 
       await game.runToMysteryEncounter(MysteryEncounterType.TRASH_TO_TREASURE, defaultParty);
-      await runMysteryEncounterToEnd(game, 2, undefined, true);
+      await runMysteryEncounterToEnd(game, 1, undefined, true);
 
       const enemyField = scene.getEnemyField();
-      expect(scene.phaseManager.getCurrentPhase()?.constructor.name).toBe(CommandPhase.name);
+      expect(game).toBeAtPhase("CommandPhase");
       expect(enemyField.length).toBe(1);
       expect(enemyField[0].species.speciesId).toBe(SpeciesId.GARBODOR);
       expect(enemyField[0].moveset).toEqual([
@@ -240,11 +193,11 @@ describe("Trash to Treasure - Mystery Encounter", () => {
 
     it("should have 2 Rogue, 1 Ultra, 1 Great in rewards", async () => {
       await game.runToMysteryEncounter(MysteryEncounterType.TRASH_TO_TREASURE, defaultParty);
-      await runMysteryEncounterToEnd(game, 2, undefined, true);
+      await runMysteryEncounterToEnd(game, 1, undefined, true);
       await skipBattleRunMysteryEncounterRewardsPhase(game);
-      await game.phaseInterceptor.to(SelectModifierPhase, false);
-      expect(scene.phaseManager.getCurrentPhase()?.constructor.name).toBe(SelectModifierPhase.name);
-      await game.phaseInterceptor.run(SelectModifierPhase);
+      await game.phaseInterceptor.to("SelectModifierPhase", false);
+      expect(game).toBeAtPhase("SelectModifierPhase");
+      await game.phaseInterceptor.to("SelectModifierPhase");
 
       expect(scene.ui.getMode()).to.equal(UiMode.MODIFIER_SELECT);
       const modifierSelectHandler = scene.ui.handlers.find(
@@ -252,21 +205,66 @@ describe("Trash to Treasure - Mystery Encounter", () => {
       ) as ModifierSelectUiHandler;
       expect(modifierSelectHandler.options.length).toEqual(4);
       expect(
-        modifierSelectHandler.options[0].modifierTypeOption.type.tier -
-          modifierSelectHandler.options[0].modifierTypeOption.upgradeCount,
+        modifierSelectHandler.options[0].modifierTypeOption.type.tier
+          - modifierSelectHandler.options[0].modifierTypeOption.upgradeCount,
       ).toEqual(ModifierTier.ROGUE);
       expect(
-        modifierSelectHandler.options[1].modifierTypeOption.type.tier -
-          modifierSelectHandler.options[1].modifierTypeOption.upgradeCount,
+        modifierSelectHandler.options[1].modifierTypeOption.type.tier
+          - modifierSelectHandler.options[1].modifierTypeOption.upgradeCount,
       ).toEqual(ModifierTier.ROGUE);
       expect(
-        modifierSelectHandler.options[2].modifierTypeOption.type.tier -
-          modifierSelectHandler.options[2].modifierTypeOption.upgradeCount,
+        modifierSelectHandler.options[2].modifierTypeOption.type.tier
+          - modifierSelectHandler.options[2].modifierTypeOption.upgradeCount,
       ).toEqual(ModifierTier.ULTRA);
       expect(
-        modifierSelectHandler.options[3].modifierTypeOption.type.tier -
-          modifierSelectHandler.options[3].modifierTypeOption.upgradeCount,
+        modifierSelectHandler.options[3].modifierTypeOption.type.tier
+          - modifierSelectHandler.options[3].modifierTypeOption.upgradeCount,
       ).toEqual(ModifierTier.GREAT);
+    });
+  });
+
+  describe("Option 2 - Dig for Valuables", () => {
+    it("should have the correct properties", () => {
+      const option1 = TrashToTreasureEncounter.options[1];
+      expect(option1.optionMode).toBe(MysteryEncounterOptionMode.DEFAULT);
+      expect(option1.dialogue).toBeDefined();
+      expect(option1.dialogue).toStrictEqual({
+        buttonLabel: `${namespace}:option.2.label`,
+        buttonTooltip: `${namespace}:option.2.tooltip`,
+        selected: [
+          {
+            text: `${namespace}:option.2.selected`,
+          },
+        ],
+      });
+    });
+
+    it("should give 1 Leftovers, 1 Shell Bell, and Black Sludge", async () => {
+      await game.runToMysteryEncounter(MysteryEncounterType.TRASH_TO_TREASURE, defaultParty);
+      await runMysteryEncounterToEnd(game, 2);
+      expect(game).toBeAtPhase("SelectModifierPhase");
+      await game.phaseInterceptor.to("SelectModifierPhase");
+
+      const leftovers = scene.findModifier(m => m instanceof TurnHealModifier) as TurnHealModifier;
+      expect(leftovers).toBeDefined();
+      expect(leftovers?.stackCount).toBe(1);
+
+      const shellBell = scene.findModifier(m => m instanceof HitHealModifier) as HitHealModifier;
+      expect(shellBell).toBeDefined();
+      expect(shellBell?.stackCount).toBe(1);
+
+      const blackSludge = scene.findModifier(m => m instanceof HealShopCostModifier) as HealShopCostModifier;
+      expect(blackSludge).toBeDefined();
+      expect(blackSludge?.stackCount).toBe(1);
+    });
+
+    it("should leave encounter without battle", async () => {
+      const leaveEncounterWithoutBattleSpy = vi.spyOn(EncounterPhaseUtils, "leaveEncounterWithoutBattle");
+
+      await game.runToMysteryEncounter(MysteryEncounterType.TRASH_TO_TREASURE, defaultParty);
+      await runMysteryEncounterToEnd(game, 2);
+
+      expect(leaveEncounterWithoutBattleSpy).toBeCalled();
     });
   });
 });

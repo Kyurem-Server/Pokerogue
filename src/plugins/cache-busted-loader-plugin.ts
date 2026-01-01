@@ -1,28 +1,27 @@
-import { coerceArray } from "#app/utils/common";
+import { globalScene } from "#app/global-scene";
+import { coerceArray } from "#utils/array";
 
-let manifest: object;
+export class CacheBustedLoaderPlugin extends Phaser.Loader.LoaderPlugin {
+  addFile(files: Phaser.Loader.File | Phaser.Loader.File[]): void {
+    files = coerceArray(files);
+    const { manifest } = globalScene.game;
 
-export default class CacheBustedLoaderPlugin extends Phaser.Loader.LoaderPlugin {
-  get manifest() {
-    return manifest;
-  }
+    if (!manifest) {
+      super.addFile(files);
+      return;
+    }
 
-  set manifest(manifestObj: object) {
-    manifest = manifestObj;
-  }
-
-  addFile(file): void {
-    file = coerceArray(file);
-
-    file.forEach(item => {
-      if (manifest) {
-        const timestamp = manifest[`/${item.url.replace(/\/\//g, "/")}`];
-        if (timestamp) {
-          item.url += `?t=${timestamp}`;
-        }
+    for (const item of files) {
+      if (typeof item.url !== "string") {
+        continue;
       }
-    });
 
-    super.addFile(file);
+      const timestamp = manifest[`/${item.url.replace(/\/\//g, "/")}`];
+      if (timestamp) {
+        item.url += `?t=${timestamp}`;
+      }
+    }
+
+    super.addFile(files);
   }
 }

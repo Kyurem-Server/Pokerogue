@@ -1,22 +1,23 @@
-import { BattlerTagLapseType } from "#enums/battler-tag-lapse-type";
-import type { OptionPhaseCallback } from "#app/data/mystery-encounters/mystery-encounter-option";
-import type MysteryEncounterOption from "#app/data/mystery-encounters/mystery-encounter-option";
-import { SeenEncounterData } from "#app/data/mystery-encounters/mystery-encounter-save-data";
-import { getEncounterText } from "#app/data/mystery-encounters/utils/encounter-dialogue-utils";
+import { globalScene } from "#app/global-scene";
+import { Phase } from "#app/phase";
+import { getCharVariantFromDialogue } from "#data/dialogue";
+import { ArenaTagSide } from "#enums/arena-tag-side";
 import { BattleSpec } from "#enums/battle-spec";
+import { BattlerTagLapseType } from "#enums/battler-tag-lapse-type";
 import { BattlerTagType } from "#enums/battler-tag-type";
 import { MysteryEncounterMode } from "#enums/mystery-encounter-mode";
 import { SwitchType } from "#enums/switch-type";
-import i18next from "i18next";
-import { globalScene } from "#app/global-scene";
-import { getCharVariantFromDialogue } from "../data/dialogue";
-import type { OptionSelectSettings } from "../data/mystery-encounters/utils/encounter-phase-utils";
-import { transitionMysteryEncounterIntroVisuals } from "../data/mystery-encounters/utils/encounter-phase-utils";
 import { TrainerSlot } from "#enums/trainer-slot";
-import { IvScannerModifier } from "../modifier/modifier";
-import { Phase } from "../phase";
 import { UiMode } from "#enums/ui-mode";
-import { isNullOrUndefined, randSeedItem } from "#app/utils/common";
+import { IvScannerModifier } from "#modifiers/modifier";
+import { getEncounterText } from "#mystery-encounters/encounter-dialogue-utils";
+import type { OptionSelectSettings } from "#mystery-encounters/encounter-phase-utils";
+import { transitionMysteryEncounterIntroVisuals } from "#mystery-encounters/encounter-phase-utils";
+import type { MysteryEncounterOption, OptionPhaseCallback } from "#mystery-encounters/mystery-encounter-option";
+import { SeenEncounterData } from "#mystery-encounters/mystery-encounter-save-data";
+import { randSeedItem } from "#utils/common";
+import { inSpeedOrder } from "#utils/speed-order-generator";
+import i18next from "i18next";
 
 /**
  * Will handle (in order):
@@ -49,7 +50,6 @@ export class MysteryEncounterPhase extends Phase {
 
     // Clears out queued phases that are part of standard battle
     globalScene.phaseManager.clearPhaseQueue();
-    globalScene.phaseManager.clearPhaseQueueSplice();
 
     const encounter = globalScene.currentBattle.mysteryEncounter!;
     encounter.updateSeedOffset();
@@ -78,10 +78,7 @@ export class MysteryEncounterPhase extends Phase {
     if (!this.optionSelectSettings) {
       // Saves the selected option in the ME save data, only if this is not a followup option select phase
       // Can be used for analytics purposes to track what options are popular on certain encounters
-      const encounterSaveData =
-        globalScene.mysteryEncounterSaveData.encounteredEvents[
-          globalScene.mysteryEncounterSaveData.encounteredEvents.length - 1
-        ];
+      const encounterSaveData = globalScene.mysteryEncounterSaveData.encounteredEvents.at(-1)!;
       if (encounterSaveData.type === globalScene.currentBattle.mysteryEncounter?.encounterType) {
         encounterSaveData.selectedOption = index;
       }
@@ -97,7 +94,7 @@ export class MysteryEncounterPhase extends Phase {
     if (option.onPreOptionPhase) {
       globalScene.executeWithSeedOffset(async () => {
         return await option.onPreOptionPhase!().then(result => {
-          if (isNullOrUndefined(result) || result) {
+          if (result == null || result) {
             this.continueEncounter();
           }
         });
@@ -221,31 +218,29 @@ export class MysteryEncounterBattleStartCleanupPhase extends Phase {
 
     // Lapse any residual flinches/endures but ignore all other turn-end battle tags
     const includedLapseTags = [BattlerTagType.FLINCHED, BattlerTagType.ENDURING];
-    globalScene.getField(true).forEach(pokemon => {
+    for (const pokemon of inSpeedOrder(ArenaTagSide.BOTH)) {
       const tags = pokemon.summonData.tags;
       tags
         .filter(
           t =>
-            includedLapseTags.includes(t.tagType) &&
-            t.lapseTypes.includes(BattlerTagLapseType.TURN_END) &&
-            !t.lapse(pokemon, BattlerTagLapseType.TURN_END),
+            includedLapseTags.includes(t.tagType)
+            && t.lapseTypes.includes(BattlerTagLapseType.TURN_END)
+            && !t.lapse(pokemon, BattlerTagLapseType.TURN_END),
         )
         .forEach(t => {
           t.onRemove(pokemon);
           tags.splice(tags.indexOf(t), 1);
         });
-    });
+    }
 
     // Remove any status tick phases
-    while (globalScene.phaseManager.findPhase(p => p.is("PostTurnStatusEffectPhase"))) {
-      globalScene.phaseManager.tryRemovePhase(p => p.is("PostTurnStatusEffectPhase"));
-    }
+    globalScene.phaseManager.removeAllPhasesOfType("PostTurnStatusEffectPhase");
 
     // The total number of Pokemon in the player's party that can legally fight
     const legalPlayerPokemon = globalScene.getPokemonAllowedInBattle();
     // The total number of legal player Pokemon that aren't currently on the field
     const legalPlayerPartyPokemon = legalPlayerPokemon.filter(p => !p.isActive(true));
-    if (!legalPlayerPokemon.length) {
+    if (legalPlayerPokemon.length === 0) {
       globalScene.phaseManager.unshiftNew("GameOverPhase");
       return this.end();
     }
@@ -262,6 +257,10 @@ export class MysteryEncounterBattleStartCleanupPhase extends Phase {
     // THEN, if is a double battle, and player only has 1 summoned pokemon, center pokemon on field
     if (globalScene.currentBattle.double && legalPlayerPokemon.length === 1 && legalPlayerPartyPokemon.length === 0) {
       globalScene.phaseManager.unshiftNew("ToggleDoublePositionPhase", true);
+    }
+
+    for (const pokemon of globalScene.getField(true)) {
+      pokemon.resetTurnData();
     }
 
     this.end();
@@ -293,10 +292,7 @@ export class MysteryEncounterBattlePhase extends Phase {
     this.doMysteryEncounterBattle();
   }
 
-  /**
-   * Gets intro battle message for new battle
-   * @private
-   */
+  /** Get intro battle message for new battle */
   private getBattleMessage(): string {
     const enemyField = globalScene.getEnemyField();
     const encounterMode = globalScene.currentBattle.mysteryEncounter!.encounterMode;
@@ -327,8 +323,7 @@ export class MysteryEncounterBattlePhase extends Phase {
   }
 
   /**
-   * Queues {@linkcode SummonPhase}s for the new battle, and handles trainer animations/dialogue if it's a Trainer battle
-   * @private
+   * Queue {@linkcode SummonPhase}s for the new battle and handle trainer animations/dialogue for Trainer battles
    */
   private doMysteryEncounterBattle() {
     const encounterMode = globalScene.currentBattle.mysteryEncounter!.encounterMode;
@@ -373,7 +368,7 @@ export class MysteryEncounterBattlePhase extends Phase {
 
       const encounterMessages = globalScene.currentBattle.trainer?.getEncounterMessages();
 
-      if (!encounterMessages || !encounterMessages.length) {
+      if (!encounterMessages || encounterMessages.length === 0) {
         doSummon();
       } else {
         const trainer = globalScene.currentBattle.trainer;
@@ -405,7 +400,6 @@ export class MysteryEncounterBattlePhase extends Phase {
 
   /**
    * Initiate {@linkcode SummonPhase}s, {@linkcode ScanIvsPhase}, {@linkcode PostSummonPhase}s, etc.
-   * @private
    */
   private endBattleSetup() {
     const enemyField = globalScene.getEnemyField();
@@ -435,7 +429,9 @@ export class MysteryEncounterBattlePhase extends Phase {
       }
     } else {
       if (availablePartyMembers.length > 1 && availablePartyMembers[1].isOnField()) {
-        globalScene.getPlayerField().forEach(pokemon => pokemon.lapseTag(BattlerTagType.COMMANDED));
+        for (const pokemon of inSpeedOrder(ArenaTagSide.PLAYER)) {
+          pokemon.lapseTag(BattlerTagType.COMMANDED);
+        }
         globalScene.phaseManager.pushNew("ReturnPhase", 1);
       }
       globalScene.phaseManager.pushNew("ToggleDoublePositionPhase", false);
@@ -451,13 +447,11 @@ export class MysteryEncounterBattlePhase extends Phase {
       }
     }
 
+    globalScene.phaseManager.pushNew("InitEncounterPhase");
     this.end();
   }
 
-  /**
-   * Ease in enemy trainer
-   * @private
-   */
+  /** Ease in enemy trainer */
   private showEnemyTrainer(): void {
     // Show enemy trainer
     const trainer = globalScene.currentBattle.trainer;
@@ -552,7 +546,7 @@ export class MysteryEncounterRewardsPhase extends Phase {
     if (encounter.doEncounterRewards) {
       encounter.doEncounterRewards();
     } else if (this.addHealPhase) {
-      globalScene.phaseManager.tryRemovePhase(p => p.is("SelectModifierPhase"));
+      globalScene.phaseManager.removeAllPhasesOfType("SelectModifierPhase");
       globalScene.phaseManager.unshiftNew("SelectModifierPhase", 0, undefined, {
         fillRemaining: false,
         rerollMultiplier: -1,
@@ -590,7 +584,7 @@ export class PostMysteryEncounterPhase extends Phase {
     if (this.onPostOptionSelect) {
       globalScene.executeWithSeedOffset(async () => {
         return await this.onPostOptionSelect!().then(result => {
-          if (isNullOrUndefined(result) || result) {
+          if (result == null || result) {
             this.continueEncounter();
           }
         });

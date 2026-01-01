@@ -1,14 +1,11 @@
-import { Stat } from "#enums/stat";
-import GameManager from "#test/testUtils/gameManager";
 import { AbilityId } from "#enums/ability-id";
+import { BattlerIndex } from "#enums/battler-index";
 import { MoveId } from "#enums/move-id";
 import { SpeciesId } from "#enums/species-id";
+import { Stat } from "#enums/stat";
+import { GameManager } from "#test/test-utils/game-manager";
 import Phaser from "phaser";
 import { afterEach, beforeAll, beforeEach, describe, expect, it } from "vitest";
-import { BattlerIndex } from "#enums/battler-index";
-import { EnemyCommandPhase } from "#app/phases/enemy-command-phase";
-import { VictoryPhase } from "#app/phases/victory-phase";
-import { TurnEndPhase } from "#app/phases/turn-end-phase";
 
 describe("Abilities - Moxie", () => {
   let phaserGame: Phaser.Game;
@@ -41,36 +38,32 @@ describe("Abilities - Moxie", () => {
     const moveToUse = MoveId.AERIAL_ACE;
     await game.classicMode.startBattle([SpeciesId.MIGHTYENA, SpeciesId.MIGHTYENA]);
 
-    const playerPokemon = game.scene.getPlayerPokemon()!;
+    const playerPokemon = game.field.getPlayerPokemon();
 
     expect(playerPokemon.getStatStage(Stat.ATK)).toBe(0);
 
     game.move.select(moveToUse);
-    await game.phaseInterceptor.runFrom(EnemyCommandPhase).to(VictoryPhase);
+    await game.phaseInterceptor.to("VictoryPhase");
 
     expect(playerPokemon.getStatStage(Stat.ATK)).toBe(1);
   });
 
   // TODO: Activate this test when MOXIE is corrected to work on faint and not on battle victory
-  it.todo(
-    "should raise ATK stat stage by 1 when defeating an ally Pokemon",
-    async () => {
-      game.override.battleStyle("double");
-      const moveToUse = MoveId.AERIAL_ACE;
-      await game.classicMode.startBattle([SpeciesId.MIGHTYENA, SpeciesId.MIGHTYENA]);
+  it.todo("should raise ATK stat stage by 1 when defeating an ally Pokemon", async () => {
+    game.override.battleStyle("double");
+    const moveToUse = MoveId.AERIAL_ACE;
+    await game.classicMode.startBattle([SpeciesId.MIGHTYENA, SpeciesId.MIGHTYENA]);
 
-      const [firstPokemon, secondPokemon] = game.scene.getPlayerField();
+    const [firstPokemon, secondPokemon] = game.scene.getPlayerField();
 
-      expect(firstPokemon.getStatStage(Stat.ATK)).toBe(0);
+    expect(firstPokemon.getStatStage(Stat.ATK)).toBe(0);
 
-      secondPokemon.hp = 1;
+    secondPokemon.hp = 1;
 
-      game.move.select(moveToUse, BattlerIndex.PLAYER_2);
+    game.move.select(moveToUse, BattlerIndex.PLAYER_2);
 
-      await game.phaseInterceptor.to(TurnEndPhase);
+    await game.phaseInterceptor.to("TurnEndPhase");
 
-      expect(firstPokemon.getStatStage(Stat.ATK)).toBe(1);
-    },
-    20000,
-  );
+    expect(firstPokemon.getStatStage(Stat.ATK)).toBe(1);
+  }, 20000);
 });

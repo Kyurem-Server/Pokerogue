@@ -1,36 +1,37 @@
+import { CLASSIC_MODE_MYSTERY_ENCOUNTER_WAVES } from "#app/constants";
+import { globalScene } from "#app/global-scene";
+import { getPokemonNameWithAffix } from "#app/messages";
+import { NON_LEGEND_PARADOX_POKEMON } from "#balance/special-species-groups";
+import type { PokemonSpecies } from "#data/pokemon-species";
+import { BattlerIndex } from "#enums/battler-index";
+import { MysteryEncounterOptionMode } from "#enums/mystery-encounter-option-mode";
+import { MysteryEncounterTier } from "#enums/mystery-encounter-tier";
+import { MysteryEncounterType } from "#enums/mystery-encounter-type";
+import { PlayerGender } from "#enums/player-gender";
+import { PokeballType } from "#enums/pokeball";
+import type { EnemyPokemon } from "#field/pokemon";
+import { IvScannerModifier } from "#modifiers/modifier";
+import { getEncounterText, showEncounterText } from "#mystery-encounters/encounter-dialogue-utils";
 import {
+  getRandomEncounterPokemon,
   initSubsequentOptionSelect,
   leaveEncounterWithoutBattle,
   transitionMysteryEncounterIntroVisuals,
   updatePlayerMoney,
-} from "#app/data/mystery-encounters/utils/encounter-phase-utils";
-import { MysteryEncounterType } from "#enums/mystery-encounter-type";
-import { globalScene } from "#app/global-scene";
-import type MysteryEncounter from "#app/data/mystery-encounters/mystery-encounter";
-import { MysteryEncounterBuilder } from "#app/data/mystery-encounters/mystery-encounter";
-import type MysteryEncounterOption from "#app/data/mystery-encounters/mystery-encounter-option";
-import { MysteryEncounterOptionBuilder } from "#app/data/mystery-encounters/mystery-encounter-option";
-import { TrainerSlot } from "#enums/trainer-slot";
-import { HiddenAbilityRateBoosterModifier, IvScannerModifier } from "#app/modifier/modifier";
-import type { EnemyPokemon } from "#app/field/pokemon";
-import { PokeballType } from "#enums/pokeball";
-import { PlayerGender } from "#enums/player-gender";
-import { NumberHolder, randSeedInt } from "#app/utils/common";
-import type PokemonSpecies from "#app/data/pokemon-species";
-import { getPokemonSpecies } from "#app/utils/pokemon-utils";
-import { MoneyRequirement } from "#app/data/mystery-encounters/mystery-encounter-requirements";
+} from "#mystery-encounters/encounter-phase-utils";
 import {
   doPlayerFlee,
   doPokemonFlee,
   getRandomSpeciesByStarterCost,
   trainerThrowPokeball,
-} from "#app/data/mystery-encounters/utils/encounter-pokemon-utils";
-import { getEncounterText, showEncounterText } from "#app/data/mystery-encounters/utils/encounter-dialogue-utils";
-import { getPokemonNameWithAffix } from "#app/messages";
-import { MysteryEncounterTier } from "#enums/mystery-encounter-tier";
-import { MysteryEncounterOptionMode } from "#enums/mystery-encounter-option-mode";
-import { CLASSIC_MODE_MYSTERY_ENCOUNTER_WAVES } from "#app/constants";
-import { NON_LEGEND_PARADOX_POKEMON } from "#app/data/balance/special-species-groups";
+} from "#mystery-encounters/encounter-pokemon-utils";
+import type { MysteryEncounter } from "#mystery-encounters/mystery-encounter";
+import { MysteryEncounterBuilder } from "#mystery-encounters/mystery-encounter";
+import type { MysteryEncounterOption } from "#mystery-encounters/mystery-encounter-option";
+import { MysteryEncounterOptionBuilder } from "#mystery-encounters/mystery-encounter-option";
+import { MoneyRequirement } from "#mystery-encounters/mystery-encounter-requirements";
+import { BooleanHolder, NumberHolder, randSeedInt } from "#utils/common";
+import { getPokemonSpecies } from "#utils/pokemon-utils";
 
 /** the i18n namespace for the encounter */
 const namespace = "mysteryEncounters/safariZone";
@@ -40,6 +41,9 @@ const TRAINER_THROW_ANIMATION_TIMES = [512, 184, 768];
 const SAFARI_MONEY_MULTIPLIER = 2;
 
 const NUM_SAFARI_ENCOUNTERS = 3;
+
+const eventEncs = new NumberHolder(0);
+const eventChance = new NumberHolder(50);
 
 /**
  * Safari Zone encounter.
@@ -73,6 +77,8 @@ export const SafariZoneEncounter: MysteryEncounter = MysteryEncounterBuilder.wit
   .withQuery(`${namespace}:query`)
   .withOnInit(() => {
     globalScene.currentBattle.mysteryEncounter?.setDialogueToken("numEncounters", NUM_SAFARI_ENCOUNTERS.toString());
+    eventEncs.value = 0;
+    eventChance.value = 50;
     return true;
   })
   .withOption(
@@ -205,7 +211,7 @@ const safariZoneGameOptions: MysteryEncounterOption[] = [
       // 80% chance to increase flee stage +1
       const fleeChangeResult = tryChangeFleeStage(1, 8);
       if (!fleeChangeResult) {
-        await showEncounterText(getEncounterText(`${namespace}:safari.busy_eating`) ?? "", null, 1000, false);
+        await showEncounterText(getEncounterText(`${namespace}:safari.busyEating`) ?? "", null, 1000, false);
       } else {
         await showEncounterText(getEncounterText(`${namespace}:safari.eating`) ?? "", null, 1000, false);
       }
@@ -233,7 +239,7 @@ const safariZoneGameOptions: MysteryEncounterOption[] = [
       // 80% chance to decrease catch stage -1
       const catchChangeResult = tryChangeCatchStage(-1, 8);
       if (!catchChangeResult) {
-        await showEncounterText(getEncounterText(`${namespace}:safari.beside_itself_angry`) ?? "", null, 1000, false);
+        await showEncounterText(getEncounterText(`${namespace}:safari.besideItselfAngry`) ?? "", null, 1000, false);
       } else {
         await showEncounterText(getEncounterText(`${namespace}:safari.angry`) ?? "", null, 1000, false);
       }
@@ -274,40 +280,40 @@ async function summonSafariPokemon() {
   const encounter = globalScene.currentBattle.mysteryEncounter!;
   // Message pokemon remaining
   encounter.setDialogueToken("remainingCount", encounter.misc.safariPokemonRemaining);
-  globalScene.phaseManager.queueMessage(getEncounterText(`${namespace}:safari.remaining_count`) ?? "", null, true);
+  globalScene.phaseManager.queueMessage(getEncounterText(`${namespace}:safari.remainingCount`) ?? "", null, true);
 
   // Generate pokemon using safariPokemonRemaining so they are always the same pokemon no matter how many turns are taken
   // Safari pokemon roll twice on shiny and HA chances, but are otherwise normal
-  let enemySpecies: PokemonSpecies;
   let pokemon: any;
   globalScene.executeWithSeedOffset(
     () => {
-      enemySpecies = getSafariSpeciesSpawn();
-      const level = globalScene.currentBattle.getLevelForWave();
-      enemySpecies = getPokemonSpecies(enemySpecies.getWildSpeciesForLevel(level, true, false, globalScene.gameMode));
-      pokemon = globalScene.addEnemyPokemon(enemySpecies, level, TrainerSlot.NONE, false);
+      console.log("Event chance %d", eventChance.value);
+      const fromEvent = new BooleanHolder(false);
+      pokemon = getRandomEncounterPokemon({
+        level: globalScene.currentBattle.getLevelForWave(),
+        includeLegendary: false,
+        includeSubLegendary: false,
+        includeMythical: false,
+        speciesFunction: getSafariSpeciesSpawn,
+        shinyRerolls: 1,
+        eventShinyRerolls: 1,
+        hiddenRerolls: 1,
+        eventHiddenRerolls: 1,
+        eventChance: eventChance.value,
+        isEventEncounter: fromEvent,
+      });
 
-      // Roll shiny twice
-      if (!pokemon.shiny) {
-        pokemon.trySetShinySeed();
+      pokemon.init();
+
+      // Increase chance of event encounter by 25% until one spawns
+      if (fromEvent.value) {
+        console.log("Safari zone encounter is from event");
+        eventEncs.value++;
+        eventChance.value = 50;
+      } else if (eventEncs.value === 0) {
+        console.log("Safari zone encounter is not from event");
+        eventChance.value += 25;
       }
-
-      // Roll HA twice
-      if (pokemon.species.abilityHidden) {
-        const hiddenIndex = pokemon.species.ability2 ? 2 : 1;
-        if (pokemon.abilityIndex < hiddenIndex) {
-          const hiddenAbilityChance = new NumberHolder(256);
-          globalScene.applyModifiers(HiddenAbilityRateBoosterModifier, true, hiddenAbilityChance);
-
-          const hasHiddenAbility = !randSeedInt(hiddenAbilityChance.value);
-
-          if (hasHiddenAbility) {
-            pokemon.abilityIndex = hiddenIndex;
-          }
-        }
-      }
-
-      pokemon.calculateStats();
 
       globalScene.currentBattle.enemyParty.unshift(pokemon);
     },
@@ -324,6 +330,7 @@ async function summonSafariPokemon() {
   encounter.misc.safariPokemonRemaining -= 1;
 
   globalScene.phaseManager.unshiftNew("SummonPhase", 0, false);
+  globalScene.phaseManager.unshiftNew("PostSummonPhase", BattlerIndex.ENEMY);
 
   encounter.setDialogueToken("pokemonName", getPokemonNameWithAffix(pokemon));
 
@@ -567,7 +574,7 @@ async function doEndTurn(cursorIndex: number) {
 }
 
 /**
- * @returns A random species that has at most 5 starter cost and is not Mythical, Paradox, etc.
+ * @returns A function to get a random species that has at most 5 starter cost and is not Mythical, Paradox, etc.
  */
 export function getSafariSpeciesSpawn(): PokemonSpecies {
   return getPokemonSpecies(

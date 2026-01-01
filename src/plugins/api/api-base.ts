@@ -1,5 +1,5 @@
 import { SESSION_ID_COOKIE_NAME } from "#app/constants";
-import { getCookie } from "#app/utils/cookies";
+import { getCookie } from "#utils/cookies";
 
 type DataType = "json" | "form-urlencoded";
 
@@ -69,10 +69,12 @@ export abstract class ApiBase {
       "Content-Type": config.headers?.["Content-Type"] ?? "application/json",
     };
 
-    if (import.meta.env.DEV) {
+    // can't import `isLocal` due to circular import issues
+    if (import.meta.env.MODE === "development") {
       console.log(`Sending ${config.method ?? "GET"} request to: `, this.base + path, config);
     }
 
+    // TODO: need some sort of error handling here?
     return await fetch(this.base + path, config);
   }
 

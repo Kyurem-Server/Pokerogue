@@ -1,20 +1,19 @@
-import SoundFade from "phaser3-rex-plugins/plugins/soundfade";
-import { Phase } from "#app/phase";
 import type { AnySound } from "#app/battle-scene";
+import { EVOLVE_MOVE } from "#app/constants";
 import { globalScene } from "#app/global-scene";
-import type { SpeciesFormEvolution } from "#app/data/balance/pokemon-evolutions";
-import { FusionSpeciesFormEvolution } from "#app/data/balance/pokemon-evolutions";
-import type EvolutionSceneHandler from "#app/ui/evolution-scene-handler";
-import { fixedInt, getFrameMs, randInt } from "#app/utils/common";
-import { UiMode } from "#enums/ui-mode";
-import { cos, sin } from "#app/field/anims";
-import type { PlayerPokemon } from "#app/field/pokemon";
-import type Pokemon from "#app/field/pokemon";
-import { LearnMoveSituation } from "#enums/learn-move-situation";
-import { getTypeRgb } from "#app/data/type";
-import i18next from "i18next";
 import { getPokemonNameWithAffix } from "#app/messages";
-import { EVOLVE_MOVE } from "#app/data/balance/pokemon-level-moves";
+import { Phase } from "#app/phase";
+import type { SpeciesFormEvolution } from "#balance/pokemon-evolutions";
+import { FusionSpeciesFormEvolution } from "#balance/pokemon-evolutions";
+import { getTypeRgb } from "#data/type";
+import { LearnMoveSituation } from "#enums/learn-move-situation";
+import { UiMode } from "#enums/ui-mode";
+import { cos, sin } from "#field/anims";
+import type { PlayerPokemon, Pokemon } from "#field/pokemon";
+import type { EvolutionSceneUiHandler } from "#ui/evolution-scene-ui-handler";
+import { fixedInt, getFrameMs, randInt } from "#utils/common";
+import i18next from "i18next";
+import SoundFade from "phaser3-rex-plugins/plugins/soundfade";
 
 export class EvolutionPhase extends Phase {
   // FormChangePhase inherits from this, but EvolutionPhase is not abstract.
@@ -29,9 +28,10 @@ export class EvolutionPhase extends Phase {
 
   private evolution: SpeciesFormEvolution | null;
   private fusionSpeciesEvolved: boolean; // Whether the evolution is of the fused species
-  private evolutionBgm: AnySound;
-  private evolutionHandler: EvolutionSceneHandler;
+  private evolutionBgm: AnySound | null;
+  private evolutionHandler: EvolutionSceneUiHandler;
 
+  /** Container for all assets used by the scene. When the scene is cleared, the children within this are destroyed. */
   protected evolutionContainer: Phaser.GameObjects.Container;
   protected evolutionBaseBg: Phaser.GameObjects.Image;
   protected evolutionBg: Phaser.GameObjects.Video;
@@ -79,7 +79,7 @@ export class EvolutionPhase extends Phase {
    *
    */
   private setupEvolutionAssets(): void {
-    this.evolutionHandler = globalScene.ui.getHandler() as EvolutionSceneHandler;
+    this.evolutionHandler = globalScene.ui.getHandler() as EvolutionSceneUiHandler;
     this.evolutionContainer = this.evolutionHandler.evolutionContainer;
     this.evolutionBaseBg = globalScene.add.image(0, 0, "default_bg").setOrigin(0);
 
@@ -91,16 +91,16 @@ export class EvolutionPhase extends Phase {
       .setVisible(false);
 
     this.evolutionBgOverlay = globalScene.add
-      .rectangle(0, 0, globalScene.game.canvas.width / 6, globalScene.game.canvas.height / 6, 0x262626)
+      .rectangle(0, 0, globalScene.scaledCanvas.width, globalScene.scaledCanvas.height, 0x262626)
       .setOrigin(0)
       .setAlpha(0);
     this.evolutionContainer.add([this.evolutionBaseBg, this.evolutionBgOverlay, this.evolutionBg]);
 
     this.evolutionOverlay = globalScene.add.rectangle(
       0,
-      -globalScene.game.canvas.height / 6,
-      globalScene.game.canvas.width / 6,
-      globalScene.game.canvas.height / 6 - 48,
+      -globalScene.scaledCanvas.height,
+      globalScene.scaledCanvas.width,
+      globalScene.scaledCanvas.height - 48,
       0xffffff,
     );
     this.evolutionOverlay.setOrigin(0).setAlpha(0);
@@ -136,7 +136,7 @@ export class EvolutionPhase extends Phase {
 
     sprite
       .setPipelineData("ignoreTimeTint", true)
-      .setPipelineData("spriteKey", pokemon.getSpriteKey())
+      .setPipelineData("spriteKey", spriteKey)
       .setPipelineData("shiny", pokemon.shiny)
       .setPipelineData("variant", pokemon.variant);
 
@@ -240,7 +240,7 @@ export class EvolutionPhase extends Phase {
       to: 1,
       duration: 2000,
       onUpdate: t => {
-        this.pokemonTintSprite.setAlpha(t.getValue());
+        this.pokemonTintSprite.setAlpha(t.getValue() ?? 1);
       },
       onComplete: () => {
         this.pokemonSprite.setVisible(false);
@@ -298,7 +298,9 @@ export class EvolutionPhase extends Phase {
         this.evolutionBg.setVisible(false);
       },
     });
-    SoundFade.fadeOut(globalScene, this.evolutionBgm, 100);
+    if (this.evolutionBgm) {
+      SoundFade.fadeOut(globalScene, this.evolutionBgm, 100);
+    }
   }
 
   /**
@@ -378,7 +380,9 @@ export class EvolutionPhase extends Phase {
    * Fadeout evolution music, play the cry, show the evolution completed text, and end the phase
    */
   private onEvolutionComplete(evolvedPokemon: Pokemon) {
-    SoundFade.fadeOut(globalScene, this.evolutionBgm, 100);
+    if (this.evolutionBgm) {
+      SoundFade.fadeOut(globalScene, this.evolutionBgm, 100);
+    }
     globalScene.time.delayedCall(250, () => {
       this.pokemon.cry();
       globalScene.time.delayedCall(1250, () => {
@@ -523,6 +527,7 @@ export class EvolutionPhase extends Phase {
             return;
           }
           if (i === lastCycle) {
+            this.pokemonTintSprite.setVisible(false).setActive(false);
             this.pokemonEvoTintSprite.setScale(1);
           }
         },

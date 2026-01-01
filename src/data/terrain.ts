@@ -1,9 +1,10 @@
-import type Pokemon from "../field/pokemon";
-import type Move from "./moves/move";
-import { PokemonType } from "#enums/pokemon-type";
-import type { BattlerIndex } from "#enums/battler-index";
-import i18next from "i18next";
 import { getPokemonNameWithAffix } from "#app/messages";
+import type { BattlerIndex } from "#enums/battler-index";
+import { PokemonType } from "#enums/pokemon-type";
+import type { Pokemon } from "#field/pokemon";
+import type { Move } from "#moves/move";
+import { isFieldTargeted, isSpreadMove } from "#moves/move-utils";
+import i18next from "i18next";
 
 export enum TerrainType {
   NONE,
@@ -13,13 +14,20 @@ export enum TerrainType {
   PSYCHIC,
 }
 
+export interface SerializedTerrain {
+  terrainType: TerrainType;
+  turnsLeft: number;
+}
+
 export class Terrain {
   public terrainType: TerrainType;
   public turnsLeft: number;
+  public maxDuration: number;
 
-  constructor(terrainType: TerrainType, turnsLeft?: number) {
+  constructor(terrainType: TerrainType, turnsLeft = 0, maxDuration: number = turnsLeft) {
     this.terrainType = terrainType;
-    this.turnsLeft = turnsLeft || 0;
+    this.turnsLeft = turnsLeft;
+    this.maxDuration = maxDuration;
   }
 
   lapse(): boolean {
@@ -55,13 +63,13 @@ export class Terrain {
   isMoveTerrainCancelled(user: Pokemon, targets: BattlerIndex[], move: Move): boolean {
     switch (this.terrainType) {
       case TerrainType.PSYCHIC:
-        if (!move.hasAttr("ProtectAttr")) {
-          // Cancels move if the move has positive priority and targets a Pokemon grounded on the Psychic Terrain
-          return (
-            move.getPriority(user) > 0 &&
-            user.getOpponents(true).some(o => targets.includes(o.getBattlerIndex()) && o.isGrounded())
-          );
-        }
+        // Cf https://bulbapedia.bulbagarden.net/wiki/Psychic_Terrain_(move)#Generation_VII
+        return (
+          !isFieldTargeted(move)
+          && !isSpreadMove(move)
+          && move.getPriority(user) > 0
+          && user.getOpponents(true).some(o => targets.includes(o.getBattlerIndex()) && o.isGrounded())
+        );
     }
 
     return false;

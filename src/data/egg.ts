@@ -1,43 +1,42 @@
-import type BattleScene from "#app/battle-scene";
+import type { BattleScene } from "#app/battle-scene";
 import { globalScene } from "#app/global-scene";
-import type PokemonSpecies from "#app/data/pokemon-species";
-import { getPokemonSpecies } from "#app/utils/pokemon-utils";
-import { speciesStarterCosts } from "#app/data/balance/starters";
-import { VariantTier } from "#enums/variant-tier";
-import { randInt, randomString, randSeedInt, getIvsFromId } from "#app/utils/common";
 import Overrides from "#app/overrides";
-import { pokemonPrevolutions } from "#app/data/balance/pokemon-evolutions";
-import type { PlayerPokemon } from "#app/field/pokemon";
-import i18next from "i18next";
-import { EggTier } from "#enums/egg-type";
-import { SpeciesId } from "#enums/species-id";
-import { EggSourceType } from "#enums/egg-source-types";
+import { pokemonPrevolutions } from "#balance/pokemon-evolutions";
 import {
-  MANAPHY_EGG_MANAPHY_RATE,
-  SAME_SPECIES_EGG_HA_RATE,
-  GACHA_EGG_HA_RATE,
-  GACHA_DEFAULT_RARE_EGGMOVE_RATE,
-  SAME_SPECIES_EGG_RARE_EGGMOVE_RATE,
-  GACHA_MOVE_UP_RARE_EGGMOVE_RATE,
-  GACHA_DEFAULT_SHINY_RATE,
-  GACHA_SHINY_UP_SHINY_RATE,
-  SAME_SPECIES_EGG_SHINY_RATE,
-  EGG_PITY_LEGENDARY_THRESHOLD,
+  BOOSTED_RARE_EGGMOVE_RATES,
   EGG_PITY_EPIC_THRESHOLD,
+  EGG_PITY_LEGENDARY_THRESHOLD,
   EGG_PITY_RARE_THRESHOLD,
-  SHINY_VARIANT_CHANCE,
-  SHINY_EPIC_CHANCE,
   GACHA_DEFAULT_COMMON_EGG_THRESHOLD,
-  GACHA_DEFAULT_RARE_EGG_THRESHOLD,
   GACHA_DEFAULT_EPIC_EGG_THRESHOLD,
+  GACHA_DEFAULT_RARE_EGG_THRESHOLD,
+  GACHA_DEFAULT_SHINY_RATE,
+  GACHA_EGG_HA_RATE,
   GACHA_LEGENDARY_UP_THRESHOLD_OFFSET,
-  HATCH_WAVES_MANAPHY_EGG,
+  GACHA_SHINY_UP_SHINY_RATE,
   HATCH_WAVES_COMMON_EGG,
-  HATCH_WAVES_RARE_EGG,
   HATCH_WAVES_EPIC_EGG,
   HATCH_WAVES_LEGENDARY_EGG,
-} from "#app/data/balance/rates";
-import { speciesEggTiers } from "#app/data/balance/species-egg-tiers";
+  HATCH_WAVES_MANAPHY_EGG,
+  HATCH_WAVES_RARE_EGG,
+  MANAPHY_EGG_MANAPHY_RATE,
+  RARE_EGGMOVE_RATES,
+  SAME_SPECIES_EGG_HA_RATE,
+  SAME_SPECIES_EGG_SHINY_RATE,
+  SHINY_EPIC_CHANCE,
+  SHINY_VARIANT_CHANCE,
+} from "#balance/rates";
+import { speciesEggTiers } from "#balance/species-egg-tiers";
+import { speciesStarterCosts } from "#balance/starters";
+import type { PokemonSpecies } from "#data/pokemon-species";
+import { EggSourceType } from "#enums/egg-source-types";
+import { EggTier } from "#enums/egg-type";
+import { SpeciesId } from "#enums/species-id";
+import { VariantTier } from "#enums/variant-tier";
+import type { PlayerPokemon } from "#field/pokemon";
+import { getIvsFromId, randInt, randomString, randSeedInt } from "#utils/common";
+import { getPokemonSpecies } from "#utils/pokemon-utils";
+import i18next from "i18next";
 
 export const EGG_SEED = 1073741824;
 
@@ -221,9 +220,9 @@ export class Egg {
 
   public isManaphyEgg(): boolean {
     return (
-      this._species === SpeciesId.PHIONE ||
-      this._species === SpeciesId.MANAPHY ||
-      (this._tier === EggTier.COMMON && !(this._id % 204) && !this._species)
+      this._species === SpeciesId.PHIONE
+      || this._species === SpeciesId.MANAPHY
+      || (this._tier === EggTier.COMMON && !(this._id % 204) && !this._species)
     );
   }
 
@@ -325,15 +324,15 @@ export class Egg {
     switch (this.sourceType) {
       case EggSourceType.SAME_SPECIES_EGG:
         return (
-          this._eggDescriptor ??
-          i18next.t("egg:sameSpeciesEgg", {
+          this._eggDescriptor
+          ?? i18next.t("egg:sameSpeciesEgg", {
             species: getPokemonSpecies(this._species).getName(),
           })
         );
       case EggSourceType.GACHA_LEGENDARY:
         return (
-          this._eggDescriptor ??
-          `${i18next.t("egg:gachaTypeLegendary")} (${getPokemonSpecies(getLegendaryGachaSpeciesForTimestamp(this.timestamp)).getName()})`
+          this._eggDescriptor
+          ?? `${i18next.t("egg:gachaTypeLegendary")} (${getPokemonSpecies(getLegendaryGachaSpeciesForTimestamp(this.timestamp)).getName()})`
         );
       case EggSourceType.GACHA_SHINY:
         return this._eggDescriptor ?? i18next.t("egg:gachaTypeShiny");
@@ -355,21 +354,22 @@ export class Egg {
   // #region Private methods
   ////
 
+  /**
+   * Rolls which egg move slot the egg will have.
+   * 1/x chance for rare, (x-1)/3 chance for each common move.
+   * x is determined by Egg Tier. Boosted rates used for eggs obtained through Move Up Gacha and Candy.
+   * @returns the slot for the egg move
+   */
   private rollEggMoveIndex() {
-    let baseChance = GACHA_DEFAULT_RARE_EGGMOVE_RATE;
-    switch (this._sourceType) {
-      case EggSourceType.SAME_SPECIES_EGG:
-        baseChance = SAME_SPECIES_EGG_RARE_EGGMOVE_RATE;
-        break;
-      case EggSourceType.GACHA_MOVE:
-        baseChance = GACHA_MOVE_UP_RARE_EGGMOVE_RATE;
-        break;
-      default:
-        break;
+    const tierNum = this.isManaphyEgg() ? 2 : this.tier;
+    let baseChance: number;
+    if (this._sourceType === EggSourceType.SAME_SPECIES_EGG || this._sourceType === EggSourceType.GACHA_MOVE) {
+      baseChance = BOOSTED_RARE_EGGMOVE_RATES[tierNum];
+    } else {
+      baseChance = RARE_EGGMOVE_RATES[tierNum];
     }
 
-    const tierMultiplier = this.isManaphyEgg() ? 2 : Math.pow(2, 3 - this.tier);
-    return randSeedInt(baseChance * tierMultiplier) ? randSeedInt(3) : 3;
+    return randSeedInt(baseChance) ? randSeedInt(3) : 3;
   }
 
   private getEggTierDefaultHatchWaves(eggTier?: EggTier): number {
@@ -419,10 +419,8 @@ export class Egg {
       const rand = randSeedInt(MANAPHY_EGG_MANAPHY_RATE) !== 1;
       return rand ? SpeciesId.PHIONE : SpeciesId.MANAPHY;
     }
-    if (this.tier === EggTier.LEGENDARY && this._sourceType === EggSourceType.GACHA_LEGENDARY) {
-      if (!randSeedInt(2)) {
-        return getLegendaryGachaSpeciesForTimestamp(this.timestamp);
-      }
+    if (this.tier === EggTier.LEGENDARY && this._sourceType === EggSourceType.GACHA_LEGENDARY && !randSeedInt(2)) {
+      return getLegendaryGachaSpeciesForTimestamp(this.timestamp);
     }
 
     let minStarterValue: number;
@@ -454,9 +452,9 @@ export class Egg {
       .map(s => Number.parseInt(s) as SpeciesId)
       .filter(
         s =>
-          !pokemonPrevolutions.hasOwnProperty(s) &&
-          getPokemonSpecies(s).isObtainable() &&
-          ignoredSpecies.indexOf(s) === -1,
+          !pokemonPrevolutions.hasOwnProperty(s)
+          && getPokemonSpecies(s).isObtainable()
+          && ignoredSpecies.indexOf(s) === -1,
       );
 
     // If this is the 10th egg without unlocking something new, attempt to force it.
@@ -464,7 +462,7 @@ export class Egg {
       const lockedPool = speciesPool.filter(
         s => !globalScene.gameData.dexData[s].caughtAttr && !globalScene.gameData.eggs.some(e => e.species === s),
       );
-      if (lockedPool.length) {
+      if (lockedPool.length > 0) {
         // Skip this if everything is unlocked
         speciesPool = lockedPool;
       }
@@ -487,14 +485,14 @@ export class Egg {
      * and being the same each time
      */
     let totalWeight = 0;
-    const speciesWeights: number[] = [];
-    for (const speciesId of speciesPool) {
+    const speciesWeights = new Array<number>(speciesPool.length);
+    for (const [idx, speciesId] of speciesPool.entries()) {
       // Accounts for species that have starter costs outside of the normal range for their EggTier
       const speciesCostClamped = Phaser.Math.Clamp(speciesStarterCosts[speciesId], minStarterValue, maxStarterValue);
       const weight = Math.floor(
         (((maxStarterValue - speciesCostClamped) / (maxStarterValue - minStarterValue + 1)) * 1.5 + 1) * 100,
       );
-      speciesWeights.push(totalWeight + weight);
+      speciesWeights[idx] = totalWeight + weight;
       totalWeight += weight;
     }
 
@@ -510,8 +508,8 @@ export class Egg {
     species = species!; // tell TS compiled it's defined now!
 
     if (
-      globalScene.gameData.dexData[species].caughtAttr ||
-      globalScene.gameData.eggs.some(e => e.species === species)
+      globalScene.gameData.dexData[species].caughtAttr
+      || globalScene.gameData.eggs.some(e => e.species === species)
     ) {
       globalScene.gameData.unlockPity[this.tier] = Math.min(globalScene.gameData.unlockPity[this.tier] + 1, 10);
     } else {
@@ -567,8 +565,8 @@ export class Egg {
     globalScene.gameData.eggPity[EggTier.LEGENDARY] += 1 + tierValueOffset;
     // These numbers are roughly the 80% mark. That is, 80% of the time you'll get an egg before this gets triggered.
     if (
-      globalScene.gameData.eggPity[EggTier.LEGENDARY] >= EGG_PITY_LEGENDARY_THRESHOLD &&
-      this._tier === EggTier.COMMON
+      globalScene.gameData.eggPity[EggTier.LEGENDARY] >= EGG_PITY_LEGENDARY_THRESHOLD
+      && this._tier === EggTier.COMMON
     ) {
       this._tier = EggTier.LEGENDARY;
     } else if (globalScene.gameData.eggPity[EggTier.EPIC] >= EGG_PITY_EPIC_THRESHOLD && this._tier === EggTier.COMMON) {

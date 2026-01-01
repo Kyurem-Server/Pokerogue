@@ -1,18 +1,14 @@
+import { applyAbAttrs } from "#abilities/apply-ab-attrs";
 import { globalScene } from "#app/global-scene";
-import { SemiInvulnerableTag } from "#app/data/battler-tags";
-import type { SpeciesFormChange } from "#app/data/pokemon-forms";
-import {
-  getSpeciesFormChangeMessage,
-  SpeciesFormChangeTeraTrigger,
-} from "#app/data/pokemon-forms/form-change-triggers";
-import { getTypeRgb } from "#app/data/type";
-import { BattleSpec } from "#app/enums/battle-spec";
-import { BattlerTagType } from "#app/enums/battler-tag-type";
-import type Pokemon from "#app/field/pokemon";
 import { getPokemonNameWithAffix } from "#app/messages";
-import { BattlePhase } from "./battle-phase";
-import type { MovePhase } from "./move-phase";
-import { applyAbAttrs } from "#app/data/abilities/apply-ab-attrs";
+import { SemiInvulnerableTag } from "#data/battler-tags";
+import { getSpeciesFormChangeMessage, SpeciesFormChangeTeraTrigger } from "#data/form-change-triggers";
+import type { SpeciesFormChange } from "#data/pokemon-forms";
+import { getTypeRgb } from "#data/type";
+import { BattleSpec } from "#enums/battle-spec";
+import { BattlerTagType } from "#enums/battler-tag-type";
+import type { Pokemon } from "#field/pokemon";
+import { BattlePhase } from "#phases/battle-phase";
 
 export class QuietFormChangePhase extends BattlePhase {
   public readonly phaseName = "QuietFormChangePhase";
@@ -173,12 +169,7 @@ export class QuietFormChangePhase extends BattlePhase {
       this.pokemon.initBattleInfo();
       this.pokemon.cry();
 
-      const movePhase = globalScene.phaseManager.findPhase(
-        p => p.is("MovePhase") && p.pokemon === this.pokemon,
-      ) as MovePhase;
-      if (movePhase) {
-        movePhase.cancel();
-      }
+      globalScene.phaseManager.cancelMove(p => p.pokemon === this.pokemon);
     }
     if (this.formChange.trigger instanceof SpeciesFormChangeTeraTrigger) {
       const params = { pokemon: this.pokemon };

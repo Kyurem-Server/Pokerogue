@@ -1,35 +1,34 @@
 import { globalScene } from "#app/global-scene";
-import type { ModifierTier } from "#enums/modifier-tier";
-import type { ModifierTypeOption, ModifierType } from "#app/modifier/modifier-type";
-import {
-  regenerateModifierPoolThresholds,
-  getPlayerShopModifierTypeOptionsForWave,
-  PokemonModifierType,
-  FusePokemonModifierType,
-  PokemonMoveModifierType,
-  TmModifierType,
-  RememberMoveModifierType,
-  PokemonPpRestoreModifierType,
-  PokemonPpUpModifierType,
-  getPlayerModifierTypeOptions,
-} from "#app/modifier/modifier-type";
+import Overrides from "#app/overrides";
 import { ModifierPoolType } from "#enums/modifier-pool-type";
-import type { Modifier } from "#app/modifier/modifier";
+import type { ModifierTier } from "#enums/modifier-tier";
+import { UiMode } from "#enums/ui-mode";
+import type { Modifier } from "#modifiers/modifier";
 import {
   ExtraModifierModifier,
   HealShopCostModifier,
   PokemonHeldItemModifier,
   TempExtraModifierModifier,
-} from "#app/modifier/modifier";
-import type ModifierSelectUiHandler from "#app/ui/modifier-select-ui-handler";
-import { SHOP_OPTIONS_ROW_LIMIT } from "#app/ui/modifier-select-ui-handler";
-import PartyUiHandler, { PartyUiMode, PartyOption } from "#app/ui/party-ui-handler";
-import { UiMode } from "#enums/ui-mode";
+} from "#modifiers/modifier";
+import type { CustomModifierSettings, ModifierType, ModifierTypeOption } from "#modifiers/modifier-type";
+import {
+  FusePokemonModifierType,
+  getPlayerModifierTypeOptions,
+  getPlayerShopModifierTypeOptionsForWave,
+  PokemonModifierType,
+  PokemonMoveModifierType,
+  PokemonPpRestoreModifierType,
+  PokemonPpUpModifierType,
+  RememberMoveModifierType,
+  regenerateModifierPoolThresholds,
+  TmModifierType,
+} from "#modifiers/modifier-type";
+import { BattlePhase } from "#phases/battle-phase";
+import type { ModifierSelectUiHandler } from "#ui/modifier-select-ui-handler";
+import { SHOP_OPTIONS_ROW_LIMIT } from "#ui/modifier-select-ui-handler";
+import { PartyOption, PartyUiHandler, PartyUiMode } from "#ui/party-ui-handler";
+import { NumberHolder } from "#utils/common";
 import i18next from "i18next";
-import { BattlePhase } from "./battle-phase";
-import Overrides from "#app/overrides";
-import type { CustomModifierSettings } from "#app/modifier/modifier-type";
-import { isNullOrUndefined, NumberHolder } from "#app/utils/common";
 
 export type ModifierSelectCallback = (rowCursor: number, cursor: number) => boolean;
 
@@ -178,9 +177,9 @@ export class SelectModifierPhase extends BattlePhase {
         this.openModifierMenu(modifierType, cost, modifierSelectCallback);
       }
     } else {
-      this.applyModifier(modifierType.newModifier()!);
+      this.applyModifier(modifierType.newModifier()!, cost);
     }
-    return !cost;
+    return cost === -1;
   }
 
   // Reroll rewards
@@ -216,11 +215,11 @@ export class SelectModifierPhase extends BattlePhase {
       -1,
       (fromSlotIndex: number, itemIndex: number, itemQuantity: number, toSlotIndex: number) => {
         if (
-          toSlotIndex !== undefined &&
-          fromSlotIndex < 6 &&
-          toSlotIndex < 6 &&
-          fromSlotIndex !== toSlotIndex &&
-          itemIndex > -1
+          toSlotIndex !== undefined
+          && fromSlotIndex < 6
+          && toSlotIndex < 6
+          && fromSlotIndex !== toSlotIndex
+          && itemIndex > -1
         ) {
           const itemModifiers = globalScene.findModifiers(
             m => m instanceof PokemonHeldItemModifier && m.isTransferable && m.pokemonId === party[fromSlotIndex].id,
@@ -307,10 +306,10 @@ export class SelectModifierPhase extends BattlePhase {
       -1,
       (fromSlotIndex: number, spliceSlotIndex: number) => {
         if (
-          spliceSlotIndex !== undefined &&
-          fromSlotIndex < 6 &&
-          spliceSlotIndex < 6 &&
-          fromSlotIndex !== spliceSlotIndex
+          spliceSlotIndex !== undefined
+          && fromSlotIndex < 6
+          && spliceSlotIndex < 6
+          && fromSlotIndex !== spliceSlotIndex
         ) {
           globalScene.ui.setMode(UiMode.MODIFIER_SELECT, this.isPlayer()).then(() => {
             const modifier = modifierType.newModifier(party[fromSlotIndex], party[spliceSlotIndex])!; //TODO: is the bang correct?
@@ -381,9 +380,9 @@ export class SelectModifierPhase extends BattlePhase {
     // If custom modifiers are specified, overrides default item count
     if (this.customModifierSettings) {
       const newItemCount =
-        (this.customModifierSettings.guaranteedModifierTiers?.length ?? 0) +
-        (this.customModifierSettings.guaranteedModifierTypeOptions?.length ?? 0) +
-        (this.customModifierSettings.guaranteedModifierTypeFuncs?.length ?? 0);
+        (this.customModifierSettings.guaranteedModifierTiers?.length ?? 0)
+        + (this.customModifierSettings.guaranteedModifierTypeOptions?.length ?? 0)
+        + (this.customModifierSettings.guaranteedModifierTypeFuncs?.length ?? 0);
       if (this.customModifierSettings.fillRemaining) {
         const originalCount = modifierCountHolder.value;
         modifierCountHolder.value = originalCount > newItemCount ? originalCount : newItemCount;
@@ -430,7 +429,7 @@ export class SelectModifierPhase extends BattlePhase {
     }
 
     let multiplier = 1;
-    if (!isNullOrUndefined(this.customModifierSettings?.rerollMultiplier)) {
+    if (this.customModifierSettings?.rerollMultiplier != null) {
       if (this.customModifierSettings.rerollMultiplier < 0) {
         // Completely overrides reroll cost to -1 and early exits
         return -1;

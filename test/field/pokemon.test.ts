@@ -1,11 +1,14 @@
-import { SpeciesId } from "#enums/species-id";
-import { afterEach, beforeAll, beforeEach, describe, expect, it } from "vitest";
-import GameManager from "#test/testUtils/gameManager";
-import { PokeballType } from "#enums/pokeball";
-import type BattleScene from "#app/battle-scene";
+import type { BattleScene } from "#app/battle-scene";
+import { RARE_CANDY_FRIENDSHIP_CAP } from "#app/constants";
+import { globalScene } from "#app/global-scene";
+import { getStarterValueFriendshipCap, speciesStarterCosts } from "#balance/starters";
+import { CustomPokemonData } from "#data/pokemon-data";
 import { MoveId } from "#enums/move-id";
+import { PokeballType } from "#enums/pokeball";
 import { PokemonType } from "#enums/pokemon-type";
-import { CustomPokemonData } from "#app/data/pokemon/pokemon-data";
+import { SpeciesId } from "#enums/species-id";
+import { GameManager } from "#test/test-utils/game-manager";
+import { afterEach, beforeAll, beforeEach, describe, expect, it } from "vitest";
 
 describe("Spec - Pokemon", () => {
   let phaserGame: Phaser.Game;
@@ -25,15 +28,6 @@ describe("Spec - Pokemon", () => {
     game = new GameManager(phaserGame);
   });
 
-  it("should not crash when trying to set status of undefined", async () => {
-    await game.classicMode.runToSummon([SpeciesId.ABRA]);
-
-    const pkm = game.scene.getPlayerPokemon()!;
-    expect(pkm).toBeDefined();
-
-    expect(pkm.trySetStatus(undefined)).toBe(false);
-  });
-
   describe("Add To Party", () => {
     let scene: BattleScene;
 
@@ -50,7 +44,7 @@ describe("Spec - Pokemon", () => {
     });
 
     it("should append a new pokemon by default", async () => {
-      const zubat = scene.getEnemyPokemon()!;
+      const zubat = game.field.getEnemyPokemon();
       zubat.addToParty(PokeballType.LUXURY_BALL);
 
       const party = scene.getPlayerParty();
@@ -62,7 +56,7 @@ describe("Spec - Pokemon", () => {
 
     it("should put a new pokemon into the passed slotIndex", async () => {
       const slotIndex = 1;
-      const zubat = scene.getEnemyPokemon()!;
+      const zubat = game.field.getEnemyPokemon();
       zubat.addToParty(PokeballType.LUXURY_BALL, slotIndex);
 
       const party = scene.getPlayerParty();
@@ -78,24 +72,21 @@ describe("Spec - Pokemon", () => {
 
     await game.classicMode.startBattle([SpeciesId.ROTOM]);
 
-    const fanRotom = game.scene.getPlayerPokemon()!;
+    const fanRotom = game.field.getPlayerPokemon();
 
     expect(fanRotom.compatibleTms).not.toContain(MoveId.BLIZZARD);
     expect(fanRotom.compatibleTms).toContain(MoveId.AIR_SLASH);
   });
 
   describe("Get correct fusion type", () => {
-    let scene: BattleScene;
-
     beforeEach(async () => {
       game.override.enemySpecies(SpeciesId.ZUBAT).starterSpecies(SpeciesId.ABRA).enableStarterFusion();
-      scene = game.scene;
     });
 
     it("Fusing two mons with a single type", async () => {
       game.override.starterFusionSpecies(SpeciesId.CHARMANDER);
       await game.classicMode.startBattle();
-      const pokemon = scene.getPlayerParty()[0];
+      const pokemon = game.field.getPlayerPokemon();
 
       let types = pokemon.getTypes();
       expect(types[0]).toBe(PokemonType.PSYCHIC);
@@ -136,7 +127,7 @@ describe("Spec - Pokemon", () => {
     it("Fusing two mons with same single type", async () => {
       game.override.starterFusionSpecies(SpeciesId.DROWZEE);
       await game.classicMode.startBattle();
-      const pokemon = scene.getPlayerParty()[0];
+      const pokemon = game.field.getPlayerPokemon();
 
       const types = pokemon.getTypes();
       expect(types[0]).toBe(PokemonType.PSYCHIC);
@@ -146,7 +137,7 @@ describe("Spec - Pokemon", () => {
     it("Fusing mons with one and two types", async () => {
       game.override.starterSpecies(SpeciesId.CHARMANDER).starterFusionSpecies(SpeciesId.HOUNDOUR);
       await game.classicMode.startBattle();
-      const pokemon = scene.getPlayerParty()[0];
+      const pokemon = game.field.getPlayerPokemon();
 
       const types = pokemon.getTypes();
       expect(types[0]).toBe(PokemonType.FIRE);
@@ -156,7 +147,7 @@ describe("Spec - Pokemon", () => {
     it("Fusing mons with two and one types", async () => {
       game.override.starterSpecies(SpeciesId.NUMEL).starterFusionSpecies(SpeciesId.CHARMANDER);
       await game.classicMode.startBattle();
-      const pokemon = scene.getPlayerParty()[0];
+      const pokemon = game.field.getPlayerPokemon();
 
       const types = pokemon.getTypes();
       expect(types[0]).toBe(PokemonType.FIRE);
@@ -166,7 +157,7 @@ describe("Spec - Pokemon", () => {
     it("Fusing two mons with two types", async () => {
       game.override.starterSpecies(SpeciesId.NATU).starterFusionSpecies(SpeciesId.HOUNDOUR);
       await game.classicMode.startBattle();
-      const pokemon = scene.getPlayerParty()[0];
+      const pokemon = game.field.getPlayerPokemon();
 
       let types = pokemon.getTypes();
       expect(types[0]).toBe(PokemonType.PSYCHIC);
@@ -211,18 +202,111 @@ describe("Spec - Pokemon", () => {
     });
   });
 
-  it.each([5, 25, 55, 95, 145, 195])(
-    "should set minimum IVs for enemy trainer pokemon based on wave (%i)",
-    async wave => {
-      game.override.startingWave(wave);
-      await game.classicMode.startBattle([SpeciesId.FEEBAS]);
-      const { waveIndex } = game.scene.currentBattle;
+  it.each([5, 25, 55, 95, 145, 195])(//
+  "should set minimum IVs for enemy trainer pokemon based on wave (%i)", async wave => {
+    game.override.startingWave(wave);
+    await game.classicMode.runToSummon([SpeciesId.FEEBAS]);
 
-      for (const pokemon of game.scene.getEnemyParty()) {
-        for (const index in pokemon.ivs) {
-          expect(pokemon.ivs[index]).toBeGreaterThanOrEqual(Math.floor(waveIndex / 10));
-        }
+    for (const pokemon of game.field.getEnemyParty()) {
+      for (const iv of pokemon.ivs) {
+        expect(iv).toBeGreaterThanOrEqual(Math.floor(wave / 10));
       }
-    },
-  );
+    }
+  });
+
+  it.each([
+    { wave: 5, friendship: 50 },
+    { wave: 25, friendship: 50 },
+    { wave: 55, friendship: 97 },
+    { wave: 95, friendship: 167 },
+    { wave: 145, friendship: 255 },
+    { wave: 195, friendship: 255 },
+  ])("should set friendship for enemy trainer pokemon based on wave ($wave)", async ({ wave, friendship }) => {
+    game.override.startingWave(wave);
+    await game.classicMode.runToSummon([SpeciesId.FEEBAS]);
+
+    for (const pokemon of game.field.getEnemyParty()) {
+      expect(pokemon.friendship).toBe(friendship);
+    }
+  });
+
+  describe("Friendship", () => {
+    it("should cap friendship at 255", async () => {
+      await game.classicMode.runToSummon([SpeciesId.FEEBAS]);
+
+      const feebas = game.field.getPlayerPokemon();
+      feebas.addFriendship(999);
+
+      expect(feebas.friendship).toBe(255);
+    });
+
+    it("should not go below 0 friendship", async () => {
+      await game.classicMode.runToSummon([SpeciesId.FEEBAS]);
+
+      const feebas = game.field.getPlayerPokemon();
+      feebas.addFriendship(-999);
+
+      expect(feebas.friendship).toBe(0);
+    });
+
+    it("should respect Rare Candy friendship gain cap", async () => {
+      await game.classicMode.runToSummon([SpeciesId.FEEBAS]);
+
+      const feebas = game.field.getPlayerPokemon();
+      feebas.addFriendship(999, true);
+
+      expect(feebas.friendship).toBe(RARE_CANDY_FRIENDSHIP_CAP);
+    });
+
+    it("should get 3x candy friendship in classic mode", async () => {
+      await game.classicMode.runToSummon([SpeciesId.FEEBAS]);
+
+      const feebas = game.field.getPlayerPokemon();
+      const pokemonData = globalScene.gameData.starterData[SpeciesId.FEEBAS];
+      feebas.friendship = 0;
+      pokemonData.friendship = 0;
+
+      feebas.addFriendship(10);
+
+      expect(feebas.friendship).toBe(10);
+      expect(pokemonData.friendship).toBe(30);
+    });
+
+    it("should carry over excess friendship into next candy, even if capped", async () => {
+      await game.classicMode.runToSummon([SpeciesId.FEEBAS]);
+
+      const feebas = game.field.getPlayerPokemon();
+      const pokemonData = globalScene.gameData.starterData[SpeciesId.FEEBAS];
+      feebas.friendship = 0;
+      pokemonData.friendship = 15;
+      pokemonData.candyCount = 0;
+
+      const cap = getStarterValueFriendshipCap(speciesStarterCosts[SpeciesId.FEEBAS]);
+      expect(cap).toBeLessThan(2015);
+
+      feebas.addFriendship(2000, true);
+
+      // Friendship gain was capped, but candy friendship overflowed several times over
+      expect(feebas.friendship).toBe(RARE_CANDY_FRIENDSHIP_CAP);
+      expect(pokemonData.friendship).toBe(6015 % cap);
+      expect(pokemonData.candyCount).toBe(Math.floor(6015 / cap));
+    });
+  });
+
+  it("should allow gaining candy for uncaught Pokémon", async () => {
+    await game.classicMode.runToSummon([SpeciesId.FEEBAS]);
+
+    const feebas = game.field.getPlayerPokemon();
+    const pokemonData = globalScene.gameData.starterData[SpeciesId.FEEBAS];
+    feebas.friendship = 0;
+    pokemonData.candyCount = 0;
+    // mark feebas as uncaught
+    const dexEntry = globalScene.gameData.dexData[SpeciesId.FEEBAS];
+    dexEntry.caughtAttr = 0n;
+
+    feebas.addFriendship(2000);
+
+    expect(dexEntry.caughtAttr).toBe(0n);
+    expect(pokemonData.candyCount).toBeGreaterThan(0);
+  });
 });

@@ -1,6 +1,6 @@
 import { globalScene } from "#app/global-scene";
-import { TrainerSlot } from "#enums/trainer-slot";
 import { Phase } from "#app/phase";
+import { TrainerSlot } from "#enums/trainer-slot";
 
 export abstract class BattlePhase extends Phase {
   showEnemyTrainer(trainerSlot: TrainerSlot = TrainerSlot.NONE): void {
@@ -12,17 +12,13 @@ export abstract class BattlePhase extends Phase {
     const tintSprites = globalScene.currentBattle.trainer.getTintSprites();
     for (let i = 0; i < sprites.length; i++) {
       const visible = !trainerSlot || !i === (trainerSlot === TrainerSlot.TRAINER) || sprites.length < 2;
-      [sprites[i], tintSprites[i]].map(sprite => {
+      [sprites[i], tintSprites[i]].forEach(sprite => {
         if (visible) {
           sprite.x = trainerSlot || sprites.length < 2 ? 0 : i ? 16 : -16;
         }
         sprite.setVisible(visible);
         sprite.clearTint();
       });
-      sprites[i].setVisible(visible);
-      tintSprites[i].setVisible(visible);
-      sprites[i].clearTint();
-      tintSprites[i].clearTint();
     }
     globalScene.tweens.add({
       targets: globalScene.currentBattle.trainer,

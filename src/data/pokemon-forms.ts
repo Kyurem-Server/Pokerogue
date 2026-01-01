@@ -1,14 +1,5 @@
-import type Pokemon from "../field/pokemon";
-import { allMoves } from "./data-lists";
-import { MoveCategory } from "#enums/MoveCategory";
-import type { Constructor, nil } from "#app/utils/common";
-import { AbilityId } from "#enums/ability-id";
-import { MoveId } from "#enums/move-id";
-import { SpeciesId } from "#enums/species-id";
-import { WeatherType } from "#enums/weather-type";
-import { SpeciesFormKey } from "#enums/species-form-key";
 import { globalScene } from "#app/global-scene";
-import { FormChangeItem } from "#enums/form-change-item";
+import { allMoves } from "#data/data-lists";
 import {
   MeloettaFormChangePostMoveTrigger,
   SpeciesDefaultFormMatchTrigger,
@@ -24,7 +15,17 @@ import {
   SpeciesFormChangeTeraTrigger,
   type SpeciesFormChangeTrigger,
   SpeciesFormChangeWeatherTrigger,
-} from "./pokemon-forms/form-change-triggers";
+} from "#data/form-change-triggers";
+import { AbilityId } from "#enums/ability-id";
+import { FormChangeItem } from "#enums/form-change-item";
+import { MoveCategory } from "#enums/move-category";
+import { MoveId } from "#enums/move-id";
+import { SpeciesFormKey } from "#enums/species-form-key";
+import { SpeciesId } from "#enums/species-id";
+import { WeatherType } from "#enums/weather-type";
+import type { Pokemon } from "#field/pokemon";
+import type { Constructor, nil } from "#types/common";
+import type { Mutable } from "#types/type-helpers";
 
 export type SpeciesFormChangeConditionPredicate = (p: Pokemon) => boolean;
 export type SpeciesFormChangeConditionEnforceFunc = (p: Pokemon) => void;
@@ -35,7 +36,7 @@ export class SpeciesFormChange {
   public formKey: string;
   public trigger: SpeciesFormChangeTrigger;
   public quiet: boolean;
-  public readonly conditions: SpeciesFormChangeCondition[];
+  public readonly conditions: readonly SpeciesFormChangeCondition[];
 
   constructor(
     speciesId: SpeciesId,
@@ -58,7 +59,7 @@ export class SpeciesFormChange {
       return false;
     }
 
-    if (!pokemon.species.forms.length) {
+    if (pokemon.species.forms.length === 0) {
       return false;
     }
 
@@ -116,7 +117,7 @@ function getSpeciesDependentFormChangeCondition(species: SpeciesId): SpeciesForm
 }
 
 interface PokemonFormChanges {
-  [key: string]: SpeciesFormChange[];
+  [key: string]: readonly SpeciesFormChange[];
 }
 
 // biome-ignore format: manually formatted
@@ -608,6 +609,6 @@ export function initPokemonForms() {
         );
       }
     }
-    formChanges.push(...newFormChanges);
+    (formChanges as Mutable<typeof formChanges>).push(...newFormChanges);
   }
 }

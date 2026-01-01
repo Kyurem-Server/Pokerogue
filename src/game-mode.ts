@@ -1,35 +1,35 @@
-import i18next from "i18next";
-import type { FixedBattleConfigs } from "./battle";
-import { classicFixedBattles, FixedBattleConfig } from "./battle";
-import type { Challenge } from "./data/challenge";
-import { allChallenges, applyChallenges, copyChallenge } from "./data/challenge";
-import { ChallengeType } from "#enums/challenge-type";
-import type PokemonSpecies from "./data/pokemon-species";
-import { allSpecies, modifierTypes } from "#app/data/data-lists";
-import type { Arena } from "./field/arena";
-import Overrides from "#app/overrides";
-import { isNullOrUndefined, randSeedInt, randSeedItem } from "#app/utils/common";
-import { BiomeId } from "#enums/biome-id";
-import { SpeciesId } from "#enums/species-id";
-import { Challenges } from "./enums/challenges";
+import { FixedBattleConfig } from "#app/battle";
+import { CHALLENGE_MODE_MYSTERY_ENCOUNTER_WAVES, CLASSIC_MODE_MYSTERY_ENCOUNTER_WAVES } from "#app/constants";
 import { globalScene } from "#app/global-scene";
-import { getDailyStartingBiome } from "./data/daily-run";
-import { CLASSIC_MODE_MYSTERY_ENCOUNTER_WAVES, CHALLENGE_MODE_MYSTERY_ENCOUNTER_WAVES } from "./constants";
-import { GameModes } from "#enums/game-modes";
+import Overrides from "#app/overrides";
+import { allChallenges, type Challenge, copyChallenge } from "#data/challenge";
+import { getDailyEventSeedBoss, getDailyStartingBiome } from "#data/daily-run";
+import { allSpecies, modifierTypes } from "#data/data-lists";
+import { Gender } from "#data/gender";
+import { PokemonMove } from "#data/moves/pokemon-move";
+import type { PokemonSpecies } from "#data/pokemon-species";
+import { getRandomPartyMemberFunc, trainerConfigs } from "#data/trainers/trainer-config";
+import { TrainerPartyTemplate } from "#data/trainers/trainer-party-template";
 import { BattleType } from "#enums/battle-type";
-// Custom
-import Trainer from "./field/trainer";
-import { getRandomPartyMemberFunc, trainerConfigs } from "./data/trainers/trainer-config";
-import { TrainerPartyTemplate } from "./data/trainers/TrainerPartyTemplate";
-import { TrainerType } from "#enums/trainer-type";
-import { TrainerVariant } from "#enums/trainer-variant";
-import { TrainerSlot } from "#enums/trainer-slot";
-import { PlayerGender } from "#enums/player-gender";
-import { PokeballType } from "#enums/pokeball";
+import { BiomeId } from "#enums/biome-id";
+import { ChallengeType } from "#enums/challenge-type";
+import { Challenges } from "#enums/challenges";
+import { GameModes } from "#enums/game-modes";
 import { MoveId } from "#enums/move-id";
 import { PartyMemberStrength } from "#enums/party-member-strength";
-import { Gender } from "./data/gender";
-import { PokemonMove } from "./data/moves/pokemon-move";
+import { PlayerGender } from "#enums/player-gender";
+import { PokeballType } from "#enums/pokeball";
+import { SpeciesId } from "#enums/species-id";
+import { TrainerSlot } from "#enums/trainer-slot";
+import { TrainerType } from "#enums/trainer-type";
+import { TrainerVariant } from "#enums/trainer-variant";
+import type { Arena } from "#field/arena";
+import { Trainer } from "#field/trainer";
+import { classicFixedBattles, type FixedBattleConfigs } from "#trainers/fixed-battle-configs";
+import { applyChallenges } from "#utils/challenge-utils";
+import { BooleanHolder, randSeedInt, randSeedItem } from "#utils/common";
+import { getPokemonSpecies } from "#utils/pokemon-utils";
+import i18next from "i18next";
 
 interface GameModeConfig {
   isClassic?: boolean;
@@ -96,11 +96,32 @@ export class GameMode implements GameModeConfig {
   }
 
   /**
+   * Helper function to see if a GameMode has any challenges, needed in tests
+   * @returns true if the game mode has at least one challenge
+   */
+  hasAnyChallenges(): boolean {
+    return this.challenges.length > 0;
+  }
+
+  /**
    * Helper function to see if the game mode is using fresh start
    * @returns true if a fresh start challenge is being applied
    */
   isFreshStartChallenge(): boolean {
     return this.hasChallenge(Challenges.FRESH_START);
+  }
+
+  /**
+   * Helper function to see if the game mode is using fresh start
+   * @returns true if a fresh start challenge is being applied
+   */
+  isFullFreshStartChallenge(): boolean {
+    for (const challenge of this.challenges) {
+      if (challenge.id === Challenges.FRESH_START && challenge.value === 1) {
+        return true;
+      }
+    }
+    return false;
   }
 
   /**
@@ -138,7 +159,7 @@ export class GameMode implements GameModeConfig {
    * - Town
    */
   getStartingBiome(): BiomeId {
-    if (!isNullOrUndefined(Overrides.STARTING_BIOME_OVERRIDE)) {
+    if (Overrides.STARTING_BIOME_OVERRIDE != null) {
       return Overrides.STARTING_BIOME_OVERRIDE;
     }
 
@@ -178,14 +199,14 @@ export class GameMode implements GameModeConfig {
     if (waveIndex % 10 !== 1 && waveIndex % 10) {
       /**
        * Do not check X1 floors since there's a bug that stops trainer sprites from appearing
-       * after a X0 full party heal
+       * after a X0 full party heal, this also allows for a smoother biome transition for general gameplay feel
        */
       const trainerChance = arena.getTrainerChance();
       let allowTrainerBattle = true;
       if (trainerChance) {
         const waveBase = Math.floor(waveIndex / 10) * 10;
-        // Stop generic trainers from spawning in within 3 waves of a trainer battle
-        for (let w = Math.max(waveIndex - 3, waveBase + 2); w <= Math.min(waveIndex + 3, waveBase + 9); w++) {
+        // Stop generic trainers from spawning in within 2 waves of a fixed trainer battle
+        for (let w = Math.max(waveIndex - 2, waveBase + 2); w <= Math.min(waveIndex + 2, waveBase + 9); w++) {
           if (w === waveIndex) {
             continue;
           }
@@ -217,20 +238,26 @@ export class GameMode implements GameModeConfig {
         return waveIndex > 10 && waveIndex < 50 && !(waveIndex % 10);
       default:
         return (
-          waveIndex % 30 === (offsetGym ? 0 : 20) &&
-          (biomeType !== BiomeId.END || this.isClassic || this.isWaveFinal(waveIndex))
+          waveIndex % 30 === (offsetGym ? 0 : 20)
+          && (biomeType !== BiomeId.END || this.isClassic || this.isWaveFinal(waveIndex))
         );
     }
   }
 
   getOverrideSpecies(waveIndex: number): PokemonSpecies | null {
     if (this.isDaily && this.isWaveFinal(waveIndex)) {
+      const eventBoss = getDailyEventSeedBoss(globalScene.seed);
+      if (eventBoss != null) {
+        // Cannot set form index here, it will be overriden when adding it as enemy pokemon.
+        return getPokemonSpecies(eventBoss.speciesId);
+      }
+
       const allFinalBossSpecies = allSpecies.filter(
         s =>
-          (s.subLegendary || s.legendary || s.mythical) &&
-          s.baseTotal >= 600 &&
-          s.speciesId !== SpeciesId.ETERNATUS &&
-          s.speciesId !== SpeciesId.ARCEUS,
+          (s.subLegendary || s.legendary || s.mythical)
+          && s.baseTotal >= 600
+          && s.speciesId !== SpeciesId.ETERNATUS
+          && s.speciesId !== SpeciesId.ARCEUS,
       );
       return randSeedItem(allFinalBossSpecies);
     }
@@ -305,21 +332,21 @@ export class GameMode implements GameModeConfig {
 
   /**
    * Checks whether there is a fixed battle on this gamemode on a given wave.
-   * @param {number} waveIndex The wave to check.
-   * @returns {boolean} If this game mode has a fixed battle on this wave
+   * @param waveIndex The wave to check.
+   * @returns If this game mode has a fixed battle on this wave
    */
   isFixedBattle(waveIndex: number): boolean {
     const dummyConfig = new FixedBattleConfig();
     return (
-      this.battleConfig.hasOwnProperty(waveIndex) ||
-      applyChallenges(ChallengeType.FIXED_BATTLES, waveIndex, dummyConfig)
+      this.battleConfig.hasOwnProperty(waveIndex)
+      || applyChallenges(ChallengeType.FIXED_BATTLES, waveIndex, dummyConfig)
     );
   }
 
   /**
    * Returns the config for the fixed battle for a particular wave.
-   * @param {number} waveIndex The wave to check.
-   * @returns {boolean} The fixed battle for this wave.
+   * @param waveIndex The wave to check.
+   * @returns The fixed battle for this wave.
    */
   getFixedBattle(waveIndex: number): FixedBattleConfig {
     const challengeConfig = new FixedBattleConfig();
@@ -327,6 +354,16 @@ export class GameMode implements GameModeConfig {
       return challengeConfig;
     }
     return this.battleConfig[waveIndex];
+  }
+
+  /**
+   * Check if the current game mode has the shop enabled or not
+   * @returns Whether the shop is available in the current mode
+   */
+  public getShopStatus(): boolean {
+    const status = new BooleanHolder(!this.hasNoShop);
+    applyChallenges(ChallengeType.SHOP, status);
+    return status.value;
   }
 
   getClearScoreBonus(): number {

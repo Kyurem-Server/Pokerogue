@@ -1,17 +1,22 @@
-import { type BattlerTag, loadBattlerTag } from "#app/data/battler-tags";
-import type { Gender } from "#app/data/gender";
-import type { PokemonSpeciesForm } from "#app/data/pokemon-species";
-import type { TypeDamageMultiplier } from "#app/data/type";
-import { isNullOrUndefined } from "#app/utils/common";
+import type { BattlerTag } from "#data/battler-tags";
+import { loadBattlerTag, SerializableBattlerTag } from "#data/battler-tags";
+import type { Gender } from "#data/gender";
+import { PokemonMove } from "#data/moves/pokemon-move";
+import type { PokemonSpeciesForm } from "#data/pokemon-species";
+import type { TypeDamageMultiplier } from "#data/type";
 import type { AbilityId } from "#enums/ability-id";
 import type { BerryType } from "#enums/berry-type";
 import type { MoveId } from "#enums/move-id";
-import type { PokemonType } from "#enums/pokemon-type";
-import { PokemonMove } from "#app/data/moves/pokemon-move";
-import type { TurnMove } from "#app/@types/turn-move";
-import type { AttackMoveResult } from "#app/@types/attack-move-result";
 import type { Nature } from "#enums/nature";
-import type { IllusionData } from "#app/@types/illusion-data";
+import type { PokemonType } from "#enums/pokemon-type";
+import type { SpeciesId } from "#enums/species-id";
+import { StatusEffect } from "#enums/status-effect";
+import type { AttackMoveResult } from "#types/attack-move-result";
+import type { IllusionData } from "#types/illusion-data";
+import type { SerializedSpeciesForm } from "#types/pokemon-common";
+import type { TurnMove } from "#types/turn-move";
+import type { CoerceNullPropertiesToUndefined } from "#types/type-helpers";
+import { getPokemonSpecies, getPokemonSpeciesForm } from "#utils/pokemon-utils";
 
 /**
  * Permanent data that can customize a Pokemon in non-standard ways from its Species.
@@ -42,8 +47,58 @@ export class CustomPokemonData {
 }
 
 /**
+ * Deserialize a pokemon species form from an object containing `id` and `formIdx` properties.
+ * @param value - The value to deserialize
+ * @returns The `PokemonSpeciesForm` or `null` if the fields could not be properly discerned
+ */
+function deserializePokemonSpeciesForm(value: SerializedSpeciesForm | PokemonSpeciesForm): PokemonSpeciesForm | null {
+  // @ts-expect-error: We may be deserializing a PokemonSpeciesForm, but we catch later on
+  let { id, formIdx } = value;
+
+  if (id == null || formIdx == null) {
+    // @ts-expect-error: Typescript doesn't know that in block, `value` must be a PokemonSpeciesForm
+    id = value.speciesId;
+    // @ts-expect-error: Same as above (plus we are accessing a protected property)
+    formIdx = value._formIndex;
+  }
+  // If for some reason either of these fields are null/undefined, we cannot reconstruct the species form
+  if (id == null || formIdx == null) {
+    return null;
+  }
+  return getPokemonSpeciesForm(id, formIdx);
+}
+
+interface SerializedIllusionData extends Omit<IllusionData, "fusionSpecies"> {
+  /** The id of the illusioned fusion species, or `undefined` if not a fusion */
+  fusionSpecies?: SpeciesId;
+}
+
+interface SerializedPokemonSummonData {
+  statStages: number[];
+  moveQueue: TurnMove[];
+  tags: BattlerTag[];
+  abilitySuppressed: boolean;
+  speciesForm?: SerializedSpeciesForm;
+  fusionSpeciesForm?: SerializedSpeciesForm;
+  ability?: AbilityId;
+  passiveAbility?: AbilityId;
+  gender?: Gender;
+  fusionGender?: Gender;
+  stats: number[];
+  moveset?: PokemonMove[];
+  types: PokemonType[];
+  addedType?: PokemonType;
+  illusion?: SerializedIllusionData;
+  illusionBroken: boolean;
+  berriesEatenLast: BerryType[];
+  moveHistory: TurnMove[];
+}
+
+/**
  * Persistent in-battle data for a {@linkcode Pokemon}.
  * Resets on switch or new battle.
+ *
+ * @sealed
  */
 export class PokemonSummonData {
   /** [Atk, Def, SpAtk, SpDef, Spd, Acc, Eva] */
@@ -69,12 +124,17 @@ export class PokemonSummonData {
   public stats: number[] = [0, 0, 0, 0, 0, 0];
   public moveset: PokemonMove[] | null;
 
-  // If not initialized this value will not be populated from save data.
   public types: PokemonType[] = [];
   public addedType: PokemonType | null = null;
 
-  /** Data pertaining to this pokemon's illusion. */
+  /** Data pertaining to this pokemon's Illusion, if it has one. */
   public illusion: IllusionData | null = null;
+  /**
+   * Whether this Pokemon's illusion has been broken since switching out.
+   * @defaultValue `false`
+   */
+  // TODO: Since Illusion applies on switch in, and this entire class is reset on switch-in,
+  // this may be replaceable with a check for `pokemon.summonData.illusionData !== null`
   public illusionBroken = false;
 
   /** Array containing all berries eaten in the last turn; used by {@linkcode AbilityId.CUD_CHEW} */
@@ -84,16 +144,43 @@ export class PokemonSummonData {
    * An array of all moves this pokemon has used since entering the battle.
    * Used for most moves and abilities that check prior move usage or copy already-used moves.
    */
+  // TODO: Rework this into a sort of "global move history" that also allows checking execution order (for Fusion Bolt/Flare)
   public moveHistory: TurnMove[] = [];
 
-  constructor(source?: PokemonSummonData | Partial<PokemonSummonData>) {
-    if (isNullOrUndefined(source)) {
+  constructor(source?: PokemonSummonData | SerializedPokemonSummonData) {
+    if (source == null) {
       return;
     }
 
     // TODO: Rework this into an actual generic function for use elsewhere
     for (const [key, value] of Object.entries(source)) {
-      if (isNullOrUndefined(value) && this.hasOwnProperty(key)) {
+      if (value == null && this.hasOwnProperty(key)) {
+        continue;
+      }
+
+      if (key === "speciesForm" || key === "fusionSpeciesForm") {
+        this[key] = deserializePokemonSpeciesForm(value);
+        continue;
+      }
+
+      if (key === "illusion" && typeof value === "object") {
+        // Make a copy so as not to mutate provided value
+        const illusionData = {
+          ...value,
+        };
+        if (illusionData.fusionSpecies != null) {
+          switch (typeof illusionData.fusionSpecies) {
+            case "object":
+              illusionData.fusionSpecies = getPokemonSpecies(illusionData.fusionSpecies.speciesId);
+              break;
+            case "number":
+              illusionData.fusionSpecies = getPokemonSpecies(illusionData.fusionSpecies);
+              break;
+            default:
+              illusionData.fusionSpecies = undefined;
+          }
+        }
+        this[key] = illusionData as IllusionData;
         continue;
       }
 
@@ -102,13 +189,58 @@ export class PokemonSummonData {
         continue;
       }
 
-      if (key === "tags") {
-        // load battler tags
-        this.tags = value.map((t: BattlerTag) => loadBattlerTag(t));
+      if (key === "tags" && Array.isArray(value)) {
+        // load battler tags, discarding any that are not serializable
+        this.tags = value
+          .map((t: SerializableBattlerTag) => loadBattlerTag(t))
+          .filter((t): t is SerializableBattlerTag => t instanceof SerializableBattlerTag);
         continue;
       }
       this[key] = value;
     }
+  }
+
+  /**
+   * Serialize this PokemonSummonData to JSON, converting {@linkcode PokemonSpeciesForm} and {@linkcode IllusionData.fusionSpecies}
+   * into simpler types instead of serializing all of their fields.
+   *
+   * @remarks
+   * - `IllusionData.fusionSpecies` is serialized as just the species ID
+   * - `PokemonSpeciesForm` and `PokemonSpeciesForm.fusionSpeciesForm` are converted into {@linkcode SerializedSpeciesForm} objects
+   */
+  public toJSON(): SerializedPokemonSummonData {
+    // Pokemon species forms are never saved, only the species ID.
+    const illusion = this.illusion;
+    const speciesForm = this.speciesForm;
+    const fusionSpeciesForm = this.fusionSpeciesForm;
+    const illusionSpeciesForm = illusion?.fusionSpecies;
+    const t = {
+      // the "as omit" is required to avoid TS resolving the overwritten properties to "never"
+      // We coerce null to undefined in the type, as the for loop below replaces `null` with `undefined`
+      ...(this as Omit<
+        CoerceNullPropertiesToUndefined<PokemonSummonData>,
+        "speciesForm" | "fusionSpeciesForm" | "illusion"
+      >),
+      speciesForm: speciesForm == null ? undefined : { id: speciesForm.speciesId, formIdx: speciesForm.formIndex },
+      fusionSpeciesForm:
+        fusionSpeciesForm == null
+          ? undefined
+          : { id: fusionSpeciesForm.speciesId, formIdx: fusionSpeciesForm.formIndex },
+      illusion:
+        illusion == null
+          ? undefined
+          : {
+              ...(this.illusion as Omit<typeof illusion, "fusionSpecies">),
+              fusionSpecies: illusionSpeciesForm?.speciesId,
+            },
+    };
+    // Replace `null` with `undefined`, as `undefined` never gets serialized
+    for (const [key, value] of Object.entries(t)) {
+      if (value === null) {
+        t[key] = undefined;
+      }
+    }
+    return t;
   }
 }
 
@@ -119,7 +251,6 @@ export class PokemonTempSummonData {
    * Only currently used for positioning the battle cursor.
    */
   turnCount = 1;
-
   /**
    * The number of turns this pokemon has spent in the active position since the start of the wave
    * without switching out.
@@ -144,7 +275,7 @@ export class PokemonBattleData {
   public berriesEaten: BerryType[] = [];
 
   constructor(source?: PokemonBattleData | Partial<PokemonBattleData>) {
-    if (!isNullOrUndefined(source)) {
+    if (source != null) {
       this.hitCount = source.hitCount ?? 0;
       this.hasEatenBerry = source.hasEatenBerry ?? false;
       this.berriesEaten = source.berriesEaten ?? [];
@@ -177,8 +308,10 @@ export class PokemonTurnData {
   /** How many times the current move should hit the target(s) */
   public hitCount = 0;
   /**
-   * - `-1` = Calculate how many hits are left
-   * - `0` = Move is finished
+   * - `-1`: Calculate how many hits are left
+   * - `0`: Move is finished
+   * - `>0`: Move is in process of hitting targets
+   * @defaultValue `-1`
    */
   public hitsLeft = -1;
   public totalDamageDealt = 0;
@@ -190,15 +323,22 @@ export class PokemonTurnData {
   public statStagesDecreased = false;
   public moveEffectiveness: TypeDamageMultiplier | null = null;
   public combiningPledge?: MoveId;
+  /** The Pokemon was brought in this turn by a switch action (not an intial encounter/summon) */
   public switchedInThisTurn = false;
+  public summonedThisTurn = false;
   public failedRunAway = false;
   public joinedRound = false;
   /**
-   * The amount of times this Pokemon has acted again and used a move in the current turn.
-   * Used to make sure multi-hits occur properly when the user is
-   * forced to act again in the same turn, and **must be incremented** by any effects that grant extra actions.
+   * Tracker for a pending status effect.
+   *
+   * @remarks
+   * Set whenever {@linkcode Pokemon#trySetStatus} succeeds in order to prevent subsequent status effects
+   * from being applied. \
+   * Necessary because the status is not actually set until the {@linkcode ObtainStatusEffectPhase} runs,
+   * which may not happen before another status effect is attempted to be applied.
+   * @defaultValue `StatusEffect.NONE`
    */
-  public extraTurns = 0;
+  public pendingStatus: StatusEffect = StatusEffect.NONE;
   /**
    * All berries eaten by this pokemon in this turn.
    * Saved into {@linkcode PokemonSummonData | SummonData} by {@linkcode AbilityId.CUD_CHEW} on turn end.
