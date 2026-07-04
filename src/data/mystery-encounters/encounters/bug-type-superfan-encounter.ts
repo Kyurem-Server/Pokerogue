@@ -45,7 +45,7 @@ import {
 } from "#mystery-encounters/mystery-encounter-requirements";
 import { getRandomPartyMemberFunc, trainerConfigs } from "#trainers/trainer-config";
 import { TrainerPartyCompoundTemplate, TrainerPartyTemplate } from "#trainers/trainer-party-template";
-import type { OptionSelectItem } from "#ui/abstract-option-select-ui-handler";
+import type { OptionSelectItem } from "#ui/base-option-select-ui-handler";
 import { MoveInfoOverlay } from "#ui/move-info-overlay";
 import { randSeedInt, randSeedShuffle } from "#utils/common";
 import i18next from "i18next";
@@ -119,6 +119,40 @@ const POOL_3_POKEMON = [
 const POOL_4_POKEMON = [SpeciesId.GENESECT, SpeciesId.SLITHER_WING, SpeciesId.BUZZWOLE, SpeciesId.PHEROMOSA] as const;
 
 /**
+const PHYSICAL_TUTOR_MOVES = [
+  MoveId.MEGAHORN,
+  MoveId.ATTACK_ORDER,
+  MoveId.BUG_BITE,
+  MoveId.FIRST_IMPRESSION,
+  MoveId.LUNGE,
+] as const;
+
+const SPECIAL_TUTOR_MOVES = [
+  MoveId.SILVER_WIND,
+  MoveId.SIGNAL_BEAM,
+  MoveId.BUG_BUZZ,
+  MoveId.POLLEN_PUFF,
+  MoveId.STRUGGLE_BUG,
+] as const;
+
+const STATUS_TUTOR_MOVES = [
+  MoveId.STRING_SHOT,
+  MoveId.DEFEND_ORDER,
+  MoveId.RAGE_POWDER,
+  MoveId.STICKY_WEB,
+  MoveId.SILK_TRAP,
+] as const;
+
+const MISC_TUTOR_MOVES = [
+  MoveId.LEECH_LIFE,
+  MoveId.U_TURN,
+  MoveId.HEAL_ORDER,
+  MoveId.QUIVER_DANCE,
+  MoveId.INFESTATION,
+] as const;
+ */
+
+/**
  * Wave breakpoints that determine how strong to make the Bug-Type Superfan's team
  */
 const WAVE_LEVEL_BREAKPOINTS = [30, 50, 70, 100, 120, 140, 160] as const;
@@ -142,7 +176,7 @@ export const BugTypeSuperfanEncounter: MysteryEncounter = MysteryEncounterBuilde
   )
   .withMaxAllowedEncounters(1)
   .withSceneWaveRangeRequirement(...CLASSIC_MODE_MYSTERY_ENCOUNTER_WAVES)
-  .withScenePartySizeRequirement(3, 6)
+  .withScenePartySizeRequirement(3)
   .withMaxAllowedEncounters(1)
   .withIntroSpriteConfigs([
     {
@@ -219,6 +253,12 @@ export const BugTypeSuperfanEncounter: MysteryEncounter = MysteryEncounterBuilde
       // Init the moves available for tutor
       const moveTutorOptions: PokemonMove[] = [];
       // TODO: should this use `randSeedItem`?
+      /**
+      moveTutorOptions.push(new PokemonMove(PHYSICAL_TUTOR_MOVES[randSeedInt(PHYSICAL_TUTOR_MOVES.length)]));
+      moveTutorOptions.push(new PokemonMove(SPECIAL_TUTOR_MOVES[randSeedInt(SPECIAL_TUTOR_MOVES.length)]));
+      moveTutorOptions.push(new PokemonMove(STATUS_TUTOR_MOVES[randSeedInt(STATUS_TUTOR_MOVES.length)]));
+      moveTutorOptions.push(new PokemonMove(MISC_TUTOR_MOVES[randSeedInt(MISC_TUTOR_MOVES.length)]));
+       */
       moveTutorOptions.push(new PokemonMove(MoveId.METRONOME));
       encounter.misc = {
         moveTutorOptions,
@@ -245,7 +285,7 @@ export const BugTypeSuperfanEncounter: MysteryEncounter = MysteryEncounterBuilde
         const encounter = globalScene.currentBattle.mysteryEncounter!;
 
         // Player gets different rewards depending on the number of bug types they have
-        const numBugTypes = globalScene.getPlayerParty().filter(p => p.isOfType(PokemonType.BUG, true)).length;
+        const numBugTypes = globalScene.getPlayerParty().filter(p => p.isOfType(PokemonType.BUG)).length;
         const numBugTypesText = i18next.t(`${namespace}:numBugTypes`, {
           count: numBugTypes,
         });

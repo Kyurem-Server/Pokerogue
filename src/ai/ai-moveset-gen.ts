@@ -32,13 +32,12 @@ import {
   ULTRA_TIER_TM_LEVEL_REQUIREMENT,
   ULTRA_TM_MOVESET_WEIGHT,
 } from "#balance/moves/moveset-generation";
+import { getSpeciesDeniedOffensiveStat } from "#balance/moves/off-stat-denylist";
 import { FORCED_RIVAL_SIGNATURE_MOVES, FORCED_SIGNATURE_MOVES } from "#balance/moves/signature-moves";
 import { SUPERCEDED_MOVES } from "#balance/moves/superceded-moves";
-import { speciesTmMoves, tmPoolTiers } from "#balance/tms";
-import { IS_TEST, isBeta, isDev } from "#constants/app-constants";
+import { tmPoolTiers } from "#balance/tm-pool-tiers";
+import { IS_TEST } from "#constants/app-constants";
 import { allMoves } from "#data/data-lists";
-import { AbilityId } from "#enums/ability-id";
-import { BattlerTagType } from "#enums/battler-tag-type";
 import { ModifierTier } from "#enums/modifier-tier";
 import { MoveCategory } from "#enums/move-category";
 import { MoveId } from "#enums/move-id";
@@ -46,15 +45,12 @@ import { PokemonType } from "#enums/pokemon-type";
 import { SpeciesFormKey } from "#enums/species-form-key";
 import { SpeciesId } from "#enums/species-id";
 import { Stat } from "#enums/stat";
-import { StatusEffect } from "#enums/status-effect";
-import { WeatherType } from "#enums/weather-type";
 import type { EnemyPokemon, Pokemon } from "#field/pokemon";
-import { targetSleptOrComatoseCondition, userSleptOrComatoseCondition } from "#moves/move-condition";
-import { isWeatherInstantCharge } from "#moves/move-utils";
 import { PokemonMove } from "#moves/pokemon-move";
-import type { Move, StatStageChangeAttr } from "#types/move-types";
-import { NumberHolder, randSeedInt, randSeedItem } from "#utils/common";
-import { willTerastallize } from "#utils/pokemon-utils";
+import type { Move } from "#types/move-types";
+import type { LevelMovesWithSource } from "#types/pokemon-species";
+import { NumberHolder, randSeedInt } from "#utils/common";
+import { getPokemonSpecies, willTerastallize } from "#utils/pokemon-utils";
 import { ValueHolder } from "#utils/value-holder";
 
 /**
@@ -74,7 +70,7 @@ import { ValueHolder } from "#utils/value-holder";
  */
 function getAndWeightLevelMoves(pokemon: Pokemon): Map<MoveId, number> {
   const movePool = new Map<MoveId, number>();
-  let allLevelMoves: [number, MoveId][];
+  let allLevelMoves: LevelMovesWithSource;
   // TODO: Investigate why there needs to be error handling here
   try {
     allLevelMoves = pokemon.getLevelMoves(1, true, true, pokemon.hasTrainer());
@@ -154,36 +150,21 @@ function getTmPoolForSpecies(
   allowedTiers = getAllowedTmTiers(level),
 ): void {
   const [allowCommon, allowGreat, allowUltra] = allowedTiers;
-  const tms = speciesTmMoves[speciesId];
-  // Species with no learnable TMs (e.g. Ditto) don't have entries in the `speciesTmMoves` object,
-  // so this is needed to avoid iterating over `undefined`
-  if (tms == null) {
-    return;
-  }
+  const tms = getPokemonSpecies(speciesId).getTms(formKey);
 
-  let moveId: MoveId;
   for (const tm of tms) {
-    if (Array.isArray(tm)) {
-      if (tm[0] !== formKey) {
-        continue;
-      }
-      moveId = tm[1];
-    } else {
-      moveId = tm;
-    }
-
-    if (FORBIDDEN_TM_MOVES.has(moveId) || levelPool.has(moveId) || eggPool.has(moveId) || tmPool.has(moveId)) {
+    if (FORBIDDEN_TM_MOVES.has(tm) || levelPool.has(tm) || eggPool.has(tm) || tmPool.has(tm)) {
       continue;
     }
-    switch (tmPoolTiers[moveId]) {
+    switch (tmPoolTiers[tm]) {
       case ModifierTier.COMMON:
-        allowCommon && tmPool.set(moveId, COMMON_TM_MOVESET_WEIGHT);
+        allowCommon && tmPool.set(tm, COMMON_TM_MOVESET_WEIGHT);
         break;
       case ModifierTier.GREAT:
-        allowGreat && tmPool.set(moveId, GREAT_TM_MOVESET_WEIGHT);
+        allowGreat && tmPool.set(tm, GREAT_TM_MOVESET_WEIGHT);
         break;
       case ModifierTier.ULTRA:
-        allowUltra && tmPool.set(moveId, ULTRA_TM_MOVESET_WEIGHT);
+        allowUltra && tmPool.set(tm, ULTRA_TM_MOVESET_WEIGHT);
         break;
     }
   }
@@ -269,11 +250,17 @@ function getEggPoolForSpecies(
   excludeRare: boolean,
   rareEggMoveWeight = 0,
 ): void {
+  /**
+  const eggMoves = speciesEggMoves[rootSpeciesId];
+  if (eggMoves == null) {
+    return;
+  }
+   */
   if (!speciesEggMoves[rootSpeciesId]) {
     return;
   }
   if (levelPool.has(MoveId.METRONOME)) {
-    eggPool.set(MoveId.METRONOME, !excludeRare ? rareEggMoveWeight : eggMoveWeight);
+    eggPool.set(MoveId.METRONOME, excludeRare ? eggMoveWeight : rareEggMoveWeight);
   }
   /**
   for (const [idx, moveId] of eggMoves.entries()) {
@@ -331,6 +318,7 @@ function getAndWeightEggMoves(
  * @param pool - The move pool to filter
  * @param otherPools - Other move pools to consider as available when filtering
  */
+/**
 function filterSupercededMoves(pool: Map<MoveId, number>, ...otherPools: Map<MoveId, number>[]): void {
   const currentMoves = new Set<MoveId>(pool.keys());
 
@@ -347,6 +335,7 @@ function filterSupercededMoves(pool: Map<MoveId, number>, ...otherPools: Map<Mov
     pool.delete(move);
   }
 }
+ */
 
 /**
  * Filter a move pool, removing moves that are not allowed based on specific conditions
@@ -364,6 +353,8 @@ function filterMovePool(pool: Map<MoveId, number>, isBoss: boolean, hasTrainer: 
   const blockTerrainSettingMoves = pokemon.hasAbilityWithAttr("PostSummonTerrainChangeAbAttr");
   // Block status moves if pokemon has Gorilla Tactics
   const hasGorillaTactics = pokemon.hasAbilityWithAttr("GorillaTacticsAbAttr");
+  const worseOffensiveStatDenylist = getSpeciesDeniedOffensiveStat(pokemon.species.speciesId, pokemon.formIndex);
+
   for (const [moveId, weight] of pool) {
     const move = allMoves[moveId];
     if (
@@ -375,6 +366,9 @@ function filterMovePool(pool: Map<MoveId, number>, isBoss: boolean, hasTrainer: 
       || ((isBoss || hasTrainer) // Following conditions do not apply to normal wild pokemon
         && ((isSingles && FORBIDDEN_SINGLES_MOVES.has(moveId)) // forbid doubles only moves in singles
           || (level >= LEVEL_BASED_DENYLIST_THRESHOLD && LEVEL_BASED_DENYLIST.has(moveId)) // forbid level based denylist moves
+          || (move.category !== MoveCategory.STATUS
+            && worseOffensiveStatDenylist != null
+            && doesMoveMatchOffensiveCategory(move, worseOffensiveStatDenylist))
           || (move.hasAttr("WeatherChangeAttr") && blockWeatherSettingMoves) // Forbid weather setting moves if the pokemon has a weather summoning or suppressing ability
           || (move.hasAttr("TerrainChangeAttr") && blockTerrainSettingMoves) // Forbid terrain setting moves if the pokemon has a terrain summoning ability
           || (hasGorillaTactics && move.category === MoveCategory.STATUS))) // Forbid status moves if pokemon has Gorilla Tactics
@@ -399,7 +393,7 @@ function adjustWeightsForTrainer(pool: Map<MoveId, number>): void {
     adjustedWeight *= move.getAttrs("StatStageChangeAttr").some(a => a.stages > 1 && a.selfTarget) ? 1.25 : 1;
 
     // Trainers get a weight decrease to multiturn moves
-    adjustedWeight *= !!move.isChargingMove() || !!move.hasAttr("RechargeAttr") ? 0.7 : 1;
+    adjustedWeight *= move.isChargingMove() || move.hasAttr("RechargeAttr") ? 0.7 : 1;
     if (adjustedWeight !== weight) {
       pool.set(moveId, adjustedWeight);
     }
@@ -524,9 +518,11 @@ function filterPool(
  * Perform a weighted coin flip which is heads with probability {@linkcode FORCED_SIGNATURE_MOVE_CHANCE}
  * @returns Whether the coin flip was heads
  */
+/**
 function doSignatureCoinFlip() {
   return randSeedInt(100) < FORCED_SIGNATURE_MOVE_CHANCE;
 }
+ */
 
 /**
  * Helper method that adds the move to the Pokémon's moveset and removes it from the provided pools.
@@ -573,6 +569,7 @@ function addToMoveset(
  * ⚠️ If the logic of this method changes, be sure to update the doc comment on {@linkcode FORCED_SIGNATURE_MOVES},
  * which describes how signature moves are selected.
  */
+/**
 function forceSignatureMove(
   pokemon: Pokemon,
   pool: Map<MoveId, number>,
@@ -605,6 +602,7 @@ function forceSignatureMove(
   addToMoveset(forcedSignature, pokemon, pool, tmPool, eggPool, tmCount, eggMoveCount);
   return allMoves[forcedSignature];
 }
+ */
 
 /**
  * Forcibly add a STAB move to the Pokémon's moveset from the provided pools.
@@ -711,89 +709,142 @@ function getExistingDamageMoveTypes(pokemon: Pokemon, willTera: boolean): Set<Po
   return existingMoveTypes;
 }
 
+function doesMoveMatchOffensiveCategory(move: Move, category: MoveCategory): boolean {
+  return (
+    move.category === category
+    && !move.hasAttr("FixedDamageAttr") // Fixed damage moves don't benefit from offensive boosts
+    && !move.hasAttr("DefAtkAttr") // Body press uses def stat
+    && !move.hasAttr("PhotonGeyserCategoryAttr") // Photon Geyser uses higher stat
+    && !move.hasAttr("ShellSideArmCategoryAttr") // Shell side arm uses higher stat
+    && !move.hasAttr("TargetAtkUserAtkAttr") // Foul play uses the target's attack stat
+  );
+}
+
 /**
- * Determine whether there is a move in the moveset that benefits from boosting the specified offensive stat.
+ * Determine whether there is a move in the moveset that benefits from boosting
+ * the specified offensive stat.
+ *
  * @param moveset - The moveset to check against
  * @param attr - The sole `StatStageChangeAttr` from the move being considered; if undefined, this method returns false
  * @returns Whether no moves in the moveset would benefit from the stat stage change described by `attr`
  */
-function removeSelfStatBoost(pokemon: Pokemon, attr: StatStageChangeAttr | undefined): boolean {
-  if (attr == null || attr.stats.length !== 1) {
+/**
+function removeSelfStatBoost(pokemon: Pokemon, attr: StatStageChangeAttr | undefined, moveId: MoveId): boolean {
+  // Allow attr to be undefined to make the invocation site cleaner
+  if (attr == null) {
     return false;
   }
+
   let category: MoveCategory;
-  switch (attr.stats[0]) {
-    case Stat.ATK:
+  switch (moveId) {
+    case MoveId.CURSE:
+    case MoveId.BULK_UP:
+    case MoveId.HONE_CLAWS:
       category = MoveCategory.PHYSICAL;
       break;
-    case Stat.SPATK:
+    case MoveId.CALM_MIND:
+    case MoveId.TAKE_HEART:
       category = MoveCategory.SPECIAL;
       break;
     default:
-      return false;
+      if (attr.stats.length !== 1) {
+        return false;
+      }
+      switch (attr.stats[0]) {
+        case Stat.ATK:
+          category = MoveCategory.PHYSICAL;
+          break;
+        case Stat.SPATK:
+          category = MoveCategory.SPECIAL;
+          break;
+        default:
+          return false;
+      }
   }
+
   // If any damging move matches the category, boost is not wasted.
   for (const pokemonMove of pokemon.moveset) {
     const move = pokemonMove.getMove();
-    if (
-      move.category === category
-      && !move.hasAttr("FixedDamageAttr") // Fixed damage moves don't benefit from offensive boosts
-      && !move.hasAttr("DefAtkAttr") // Body press doesn't benefit from offensive boosts
-      && !move.hasAttr("PhotonGeyserCategoryAttr") // Photon Geyser benefits from either offesive boost
-      && !move.hasAttr("ShellSideArmCategoryAttr") // Shell Side Arm benefits from either offensive boost
-    ) {
+    if (doesMoveMatchOffensiveCategory(move, category)) {
       return false;
     }
   }
   return true;
 }
+ */
+
+/**
+ * @returns Whether the Pokémon has a weather summoning or suppressing ability
+ * that would make weather setting moves redundant.
+ * @param pokemon - The Pokémon under examination
+ */
+/**
+function overridesOrIgnoresWeather(pokemon: Pokemon): boolean {
+  // Return true if the pokemon has a weather summoning or suppressing ability.
+  return (
+    pokemon.hasAbilityWithAttr("PostSummonWeatherChangeAbAttr")
+    || pokemon.hasAbilityWithAttr("SuppressWeatherEffectAbAttr")
+    || pokemon.hasAbilityWithAttr("PreAttackWeatherOverrideAbAttr")
+  );
+}
+ */
 
 /**
  * Determine whether the Pokémon would benefit from Rain Dance based on its
  * current moveset and abilities.
  * @param pokemon - The Pokémon under examination
- * @returns Whether the Pokémon would benefit from Rain Dance
+ * @returns Whether Rain Dance is effectively useless
  */
+/**
 function shouldRemoveRainDance(pokemon: Pokemon): boolean {
   if (getExistingDamageMoveTypes(pokemon, false).has(PokemonType.WATER)) {
     return false;
   }
-  for (const rainAbility of [AbilityId.RAIN_DISH, AbilityId.FORECAST, AbilityId.SWIFT_SWIM, AbilityId.DRY_SKIN]) {
+
+  const rainAbilities = [AbilityId.RAIN_DISH, AbilityId.FORECAST, AbilityId.SWIFT_SWIM, AbilityId.DRY_SKIN] as const;
+  for (const rainAbility of rainAbilities) {
     if (pokemon.hasAbility(rainAbility, false, true)) {
       return false;
     }
   }
+
   for (const pokemonMove of pokemon.moveset) {
     const move = pokemonMove.getMove();
-    if (move.findAttr(attr => attr.is("WeatherInstantChargeAttr") && attr.weatherTypes.includes(WeatherType.RAIN))) {
+    if (isWeatherInstantCharge(move, WeatherType.RAIN)) {
       return false;
     }
   }
+
   return true;
 }
+ */
 
 /**
  * Determine whether the Pokémon would benefit from Sunny Day based on its
  * current moveset and abilities.
  * @param pokemon - The Pokémon under examination
- * @returns Whether the Pokémon would benefit from Sunny Day
+ * @returns Whether Sunny Day is effectively useless
  */
+/**
 function shouldRemoveSunnyDay(pokemon: Pokemon): boolean {
   if (getExistingDamageMoveTypes(pokemon, false).has(PokemonType.FIRE)) {
-    return true;
+    return false;
   }
-  // Solar power depends on having a move that is specially boosted
-  for (const sunAbility of [
+
+  const sunAbilities = [
     AbilityId.CHLOROPHYLL,
     AbilityId.FLOWER_GIFT,
     AbilityId.PROTOSYNTHESIS,
     AbilityId.HARVEST,
     AbilityId.FORECAST,
-  ]) {
+  ] as const;
+  for (const sunAbility of sunAbilities) {
     if (pokemon.hasAbility(sunAbility, false, true)) {
       return false;
     }
   }
+
+  // Solar power depends on having a move that is specially boosted
   const hasSolarPower = pokemon.hasAbility(AbilityId.SOLAR_POWER, false, true);
   for (const pokemonMove of pokemon.moveset) {
     const move = pokemonMove.getMove();
@@ -806,19 +857,25 @@ function shouldRemoveSunnyDay(pokemon: Pokemon): boolean {
       return false;
     }
   }
+
   return true;
 }
+ */
 
 /**
  * Determine whether the Pokémon would benefit from Snow/Hail based on its
  * current moveset and abilities.
  * @param pokemon - The Pokémon under examination
- * @returns Whether the Pokémon would benefit from Snow/Hail
+ * @returns Whether Snow/Hail is effectively useless
  */
 // TODO: Extract out common functionality between this and sandstorm
-function removeSnowscapeHail(pokemon: Pokemon, willTera: boolean): boolean {
-  const types = new Set(pokemon.getTypes(willTera, true));
-  if (types.has(PokemonType.ICE)) {
+/**
+function shouldRemoveSnowscapeHail(pokemon: Pokemon, willTera: boolean): boolean {
+  const types = new Set(pokemon.getTypes({ includeTeraType: false }));
+  if (
+    types.has(PokemonType.ICE)
+    && (!willTera || [PokemonType.STELLAR, PokemonType.ICE].includes(pokemon.getTeraType()))
+  ) {
     return false;
   }
   for (const snowAbility of [
@@ -840,15 +897,21 @@ function removeSnowscapeHail(pokemon: Pokemon, willTera: boolean): boolean {
   }
   return true;
 }
+ */
 
 /**
  * Determine whether the Pokémon would benefit from Sandstorm based on its
  * current moveset and abilities.
  * @param pokemon - The Pokémon under examination
- * @returns Whether the Pokémon would benefit from Sandstorm
+ * @returns Whether Sandstorm is effectively useless
  */
+/**
 function shouldRemoveSandstorm(pokemon: Pokemon, willTera: boolean): boolean {
-  if (pokemon.getTypes(willTera, true).includes(PokemonType.ROCK)) {
+  const types = new Set(pokemon.getTypes({ includeTeraType: false }));
+  if (
+    types.has(PokemonType.ROCK)
+    && (!willTera || [PokemonType.STELLAR, PokemonType.ROCK].includes(pokemon.getTeraType()))
+  ) {
     return false;
   }
   if (
@@ -872,6 +935,7 @@ function shouldRemoveSandstorm(pokemon: Pokemon, willTera: boolean): boolean {
   }
   return true;
 }
+ */
 
 /**
  * Check if the Pokémon has a move that induces sleep or a drowsy state.
@@ -879,6 +943,7 @@ function shouldRemoveSandstorm(pokemon: Pokemon, willTera: boolean): boolean {
  * @param targetSelf - (default `false`) If `true`, check for self status moves instead of forbidding them
  * @returns Whether the Pokémon has a sleep-inducing move in its moveset
  */
+/**
 function hasSleepInducingMove(pokemon: Pokemon, targetSelf = false): boolean {
   for (const pokemonMove of pokemon.moveset) {
     const move = pokemonMove.getMove();
@@ -896,6 +961,84 @@ function hasSleepInducingMove(pokemon: Pokemon, targetSelf = false): boolean {
   }
   return false;
 }
+ */
+
+/**
+ * @returns Whether the Pokémon's set would allow solar beam-like moves to
+ * charge instantly, via either an ability or a move in the moveset
+ * @param pokemon - The Pokémon under examination
+ */
+/**
+function hasSunInstantCharge(pokemon: Pokemon): boolean {
+  return (
+    pokemon.moveset.some(m => m.moveId === MoveId.SUNNY_DAY)
+    || pokemon
+      .getAbilityAttrs("PostSummonWeatherChangeAbAttr")
+      .some(a => [WeatherType.SUNNY, WeatherType.HARSH_SUN].includes(a.weatherType))
+    || pokemon
+      .getAbilityAttrs("PreAttackWeatherOverrideAbAttr")
+      .some(a => [WeatherType.SUNNY, WeatherType.HARSH_SUN].includes(a.weatherType))
+  );
+}
+ */
+
+/**
+ * Determine whether the pokemon's set would allow it to poison a target, either
+ * via a move in the moveset or an ability.
+ *
+ * @remarks
+ * As this method is written for movegen, Dire Claw is intentionally
+ * ignored as a possible source of poison due to its possibility
+ * of inflicting several status ailments.
+ * @param pokemon - The Pokémon under examination
+ */
+/**
+function canInflictPoison(pokemon: Pokemon): boolean {
+  // Has a move that can inflict poison
+  const noSheerForce = !pokemon.hasAbility(AbilityId.SHEER_FORCE, false, true);
+  if (
+    pokemon.moveset.some(m => {
+      const move = m.getMove();
+      return (
+        // Hard coding baneful bunker; checking for battler tag is needlessly cumbersome
+        move.id === MoveId.BANEFUL_BUNKER
+        || (move.getAttrs("StatusEffectAttr").some(a => [StatusEffect.POISON, StatusEffect.TOXIC].includes(a.effect))
+          && (noSheerForce || move.chance < 0))
+      );
+    })
+  ) {
+    return true;
+  }
+
+  // Has ability that inflicts poison on attackers
+  if (
+    pokemon
+      .getAbilityAttrs("PostDefendApplyStatusEffectAbAttr")
+      .some(a => a.effects.includes(StatusEffect.POISON) || a.effects.includes(StatusEffect.TOXIC))
+  ) {
+    return true;
+  }
+
+  // Has ability that inflicts poison on attack (respecting contact requirements)
+  const canMakeContact =
+    pokemon.moveset.some(m => m.getMove().hasFlag(MoveFlags.MAKES_CONTACT))
+    && !pokemon.hasAbilityWithAttr("IgnoreContactAbAttr");
+  if (
+    canMakeContact
+    && pokemon
+      .getAbilityAttrs("PostAttackApplyStatusEffectAbAttr")
+      .some(
+        a =>
+          a.effects.includes(StatusEffect.POISON)
+          || (a.effects.includes(StatusEffect.TOXIC) && (canMakeContact || !a.contactRequired)),
+      )
+  ) {
+    return true;
+  }
+
+  return false;
+}
+ */
 
 /**
  * Filter a Pokémon's moveset, removing moves that are only useful in combination
@@ -904,6 +1047,7 @@ function hasSleepInducingMove(pokemon: Pokemon, targetSelf = false): boolean {
  * @param willTera - Whether the Pokémon is guaranteed to Tera
  * @returns Whether any moves were removed from the moveset
  */
+/**
 function filterUselessMoves(pokemon: Pokemon, willTera: boolean): boolean {
   let numWeatherMoves = 0;
   const moveset = pokemon.moveset;
@@ -912,22 +1056,25 @@ function filterUselessMoves(pokemon: Pokemon, willTera: boolean): boolean {
     if (move.hasAttr("WeatherChangeAttr")) {
       numWeatherMoves++;
     }
+    const moveId = move.id;
     if (
-      (move.id === MoveId.RAIN_DANCE && shouldRemoveRainDance(pokemon))
-      || (move.id === MoveId.SUNNY_DAY && shouldRemoveSunnyDay(pokemon))
-      || ((move.id === MoveId.SNOWSCAPE || move.id === MoveId.HAIL) && removeSnowscapeHail(pokemon, willTera))
-      || (move.id === MoveId.SANDSTORM && shouldRemoveSandstorm(pokemon, willTera))
+      (move.hasAttr("WeatherChangeAttr") && overridesOrIgnoresWeather(pokemon))
+      || (moveId === MoveId.RAIN_DANCE && shouldRemoveRainDance(pokemon))
+      || (moveId === MoveId.SUNNY_DAY && shouldRemoveSunnyDay(pokemon))
+      || ((moveId === MoveId.SNOWSCAPE || moveId === MoveId.HAIL) && shouldRemoveSnowscapeHail(pokemon, willTera))
+      || (moveId === MoveId.SANDSTORM && shouldRemoveSandstorm(pokemon, willTera))
       || (move.is("SelfStatusMove") // Check if this is a stat boosting move that only boosts one stat
         && move.attrs.length === 1
-        && removeSelfStatBoost(pokemon, move.getAttrs("StatStageChangeAttr")[0]))
+        && removeSelfStatBoost(pokemon, move.getAttrs("StatStageChangeAttr")[0], moveId))
       || (move.hasCondition(targetSleptOrComatoseCondition) && !hasSleepInducingMove(pokemon))
       || (move.hasCondition(userSleptOrComatoseCondition) && !hasSleepInducingMove(pokemon, true))
-      || (move.id === MoveId.AURORA_VEIL // Aurora veil without hail / snowscape
+      || (moveId === MoveId.AURORA_VEIL // Aurora veil without hail / snowscape
         && !(
           pokemon.hasAbility(AbilityId.SNOW_WARNING, false, true)
           || moveset.some(m => [MoveId.HAIL, MoveId.SNOWSCAPE].includes(m.moveId))
         ))
-      // TODO: Add condition for venom drench
+      || ([MoveId.SOLAR_BEAM, MoveId.SOLAR_BLADE].includes(moveId) && !hasSunInstantCharge(pokemon))
+      || (moveId === MoveId.VENOM_DRENCH && !canInflictPoison(pokemon))
     ) {
       moveset.splice(i, 1);
       return true;
@@ -946,6 +1093,7 @@ function filterUselessMoves(pokemon: Pokemon, willTera: boolean): boolean {
   }
   return false;
 }
+ */
 
 /**
  * Adjust weights in the remaining move pool based on existing moves in the Pokémon's moveset
@@ -1062,6 +1210,7 @@ function fillInRemainingMovesetSlots(
  * @param pool - The move pool containing move IDs and their weights
  * @param note - Short note to include in the log for context
  */
+/**
 function debugMoveWeights(pokemon: Pokemon, pool: Map<MoveId, number>, note: string): void {
   if (isBeta || isDev || (IS_TEST && __INTERNAL_TEST_EXPORTS.forceLogging)) {
     const moveNameToWeightMap = new Map<string, number>();
@@ -1072,6 +1221,7 @@ function debugMoveWeights(pokemon: Pokemon, pool: Map<MoveId, number>, note: str
     console.log("%cComputed move weights [%s] for %s", "color: blue", note, pokemon.name, moveNameToWeightMap);
   }
 }
+ */
 
 /**
  * Generate a moveset for a given Pokémon based on its level, types, stats, and whether it is wild or a trainer's Pokémon.
@@ -1116,12 +1266,19 @@ export function generateMoveset(pokemon: Pokemon, forceRivalSignatures = false):
   // Step 2: Filter out forbidden moves
   filterMovePool(movePool, isBoss, hasTrainer, pokemon);
 
-  // Determine whether this pokemon will instantly tera
+  // Step 3: Adjust weights for trainers
+  if (hasTrainer) {
+    adjustWeightsForTrainer(movePool);
+  }
+
+  /** Determine whether this pokemon will instantly tera */
+/**
   const willTera = hasTrainer && willTerastallize(pokemon as EnemyPokemon);
 
   adjustDamageMoveWeights(movePool, pokemon, willTera);
 
-  // The higher this is, the greater the impact of weight. At `0` all moves are equal weight.
+  /** The higher this is, the greater the impact of weight. At `0` all moves are equal weight. */
+/**
   let weightMultiplier = BASE_WEIGHT_MULTIPLIER;
   if (isBoss) {
     weightMultiplier += BOSS_EXTRA_WEIGHT_MULTIPLIER;
@@ -1179,18 +1336,19 @@ export function generateMoveset(pokemon: Pokemon, useRivalSignatures = false): v
   const isBoss = pokemon.isBoss();
 
   switch (true) {
-  case useRivalSignatures || (pokemon.species.speciesId === SpeciesId.RAYQUAZA && pokemon.getFormKey() === SpeciesFormKey.MEGA):
-    pokemon.moveset = [new PokemonMove(MoveId.METRONOME, 0, 3)];
-    break;
-  case isBoss && hasTrainer:
-    pokemon.moveset = [new PokemonMove(MoveId.METRONOME, 0, 2)];
-    break;
-  case isBoss || hasTrainer:
-    pokemon.moveset = [new PokemonMove(MoveId.METRONOME, 0, 1)];
-    break;
-  default:
-    pokemon.moveset = [new PokemonMove(MoveId.METRONOME)];
-    break;
+    case useRivalSignatures
+      || (pokemon.species.speciesId === SpeciesId.RAYQUAZA && pokemon.getFormKey() === SpeciesFormKey.MEGA):
+      pokemon.moveset = [new PokemonMove(MoveId.METRONOME, 0, 3)];
+      break;
+    case isBoss && hasTrainer:
+      pokemon.moveset = [new PokemonMove(MoveId.METRONOME, 0, 2)];
+      break;
+    case isBoss || hasTrainer:
+      pokemon.moveset = [new PokemonMove(MoveId.METRONOME, 0, 1)];
+      break;
+    default:
+      pokemon.moveset = [new PokemonMove(MoveId.METRONOME)];
+      break;
   }
 }
 

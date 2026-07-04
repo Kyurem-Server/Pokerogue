@@ -1,7 +1,9 @@
+import { audioManager } from "#app/global-audio-manager";
 import { globalScene } from "#app/global-scene";
-import Overrides from "#app/overrides";
+import { activeOverrides } from "#app/overrides";
 import { ModifierPoolType } from "#enums/modifier-pool-type";
 import type { ModifierTier } from "#enums/modifier-tier";
+import { PartyUiMode } from "#enums/party-ui-mode";
 import { UiMode } from "#enums/ui-mode";
 import type { Modifier } from "#modifiers/modifier";
 import {
@@ -26,7 +28,7 @@ import {
 import { BattlePhase } from "#phases/battle-phase";
 import type { ModifierSelectUiHandler } from "#ui/modifier-select-ui-handler";
 import { SHOP_OPTIONS_ROW_LIMIT } from "#ui/modifier-select-ui-handler";
-import { PartyOption, PartyUiHandler, PartyUiMode } from "#ui/party-ui-handler";
+import { PartyOption, PartyUiHandler } from "#ui/party-ui-handler";
 import { NumberHolder } from "#utils/common";
 import i18next from "i18next";
 
@@ -159,7 +161,7 @@ export class SelectModifierPhase extends BattlePhase {
     globalScene.applyModifier(HealShopCostModifier, true, healingItemCost);
     const cost = healingItemCost.value;
 
-    if (globalScene.money < cost && !Overrides.WAIVE_ROLL_FEE_OVERRIDE) {
+    if (globalScene.money < cost && !activeOverrides.WAIVE_ROLL_FEE_OVERRIDE) {
       globalScene.ui.playError();
       return false;
     }
@@ -200,12 +202,12 @@ export class SelectModifierPhase extends BattlePhase {
     );
     globalScene.ui.clearText();
     globalScene.ui.setMode(UiMode.MESSAGE).then(() => super.end());
-    if (!Overrides.WAIVE_ROLL_FEE_OVERRIDE) {
+    if (!activeOverrides.WAIVE_ROLL_FEE_OVERRIDE) {
       globalScene.money -= rerollCost;
       globalScene.updateMoneyText();
       globalScene.animateMoneyChanged(false);
     }
-    globalScene.playSound("se/buy");
+    audioManager.playSound("se/buy");
     return true;
   }
 
@@ -279,12 +281,12 @@ export class SelectModifierPhase extends BattlePhase {
 
     if (cost !== -1 && !(modifier.type instanceof RememberMoveModifierType)) {
       if (result) {
-        if (!Overrides.WAIVE_ROLL_FEE_OVERRIDE) {
+        if (!activeOverrides.WAIVE_ROLL_FEE_OVERRIDE) {
           globalScene.money -= cost;
           globalScene.updateMoneyText();
           globalScene.animateMoneyChanged(false);
         }
-        globalScene.playSound("se/buy");
+        audioManager.playSound("se/buy");
         (globalScene.ui.getHandler() as ModifierSelectUiHandler).updateCostText();
       } else {
         globalScene.ui.playError();
@@ -419,7 +421,7 @@ export class SelectModifierPhase extends BattlePhase {
 
   getRerollCost(lockRarities: boolean): number {
     let baseValue = 0;
-    if (Overrides.WAIVE_ROLL_FEE_OVERRIDE) {
+    if (activeOverrides.WAIVE_ROLL_FEE_OVERRIDE) {
       return baseValue;
     }
     if (lockRarities) {

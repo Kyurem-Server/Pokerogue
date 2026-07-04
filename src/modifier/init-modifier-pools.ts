@@ -1,6 +1,6 @@
 import { timedEventManager } from "#app/global-event-manager";
 import { globalScene } from "#app/global-scene";
-import { pokemonEvolutions } from "#balance/pokemon-evolutions";
+import { speciesDataRegistry } from "#app/global-species-data-registry";
 import { modifierTypes } from "#data/data-lists";
 import { MAX_PER_TYPE_POKEBALLS } from "#data/pokeball";
 import { AbilityId } from "#enums/ability-id";
@@ -85,9 +85,52 @@ function initCommonModifierPool() {
       },
       3,
     ),
+    /**
+    new WeightedModifierType(
+      modifierTypes.ETHER,
+      (party: Pokemon[]) => {
+        const thresholdPartyMemberCount = Math.min(
+          party.filter(
+            p =>
+              p.hp
+              && !p.getHeldItems().some(m => m instanceof BerryModifier && m.berryType === BerryType.LEPPA)
+              && p
+                .getMoveset()
+                .filter(m => m.ppUsed && m.getMovePp() - m.ppUsed <= 5 && m.ppUsed > Math.floor(m.getMovePp() / 2))
+                .length > 0,
+          ).length,
+          3,
+        );
+        return thresholdPartyMemberCount * 3;
+      },
+      9,
+    ),
+    new WeightedModifierType(
+      modifierTypes.MAX_ETHER,
+      (party: Pokemon[]) => {
+        const thresholdPartyMemberCount = Math.min(
+          party.filter(
+            p =>
+              p.hp
+              && !p.getHeldItems().some(m => m instanceof BerryModifier && m.berryType === BerryType.LEPPA)
+              && p
+                .getMoveset()
+                .filter(m => m.ppUsed && m.getMovePp() - m.ppUsed <= 5 && m.ppUsed > Math.floor(m.getMovePp() / 2))
+                .length > 0,
+          ).length,
+          3,
+        );
+        return thresholdPartyMemberCount;
+      },
+      3,
+    ),
+     */
     new WeightedModifierType(modifierTypes.LURE, lureWeightFunc(10, 2)),
     new WeightedModifierType(modifierTypes.TEMP_STAT_STAGE_BOOSTER, 4),
     new WeightedModifierType(modifierTypes.BERRY, 2),
+    /**
+    new WeightedModifierType(modifierTypes.TM_COMMON, 2),
+     */
   ].map(m => {
     m.setTier(ModifierTier.COMMON);
     return m;
@@ -156,6 +199,46 @@ function initGreatModifierPool() {
       },
       9,
     ),
+    /**
+    new WeightedModifierType(
+      modifierTypes.ELIXIR,
+      (party: Pokemon[]) => {
+        const thresholdPartyMemberCount = Math.min(
+          party.filter(
+            p =>
+              p.hp
+              && !p.getHeldItems().some(m => m instanceof BerryModifier && m.berryType === BerryType.LEPPA)
+              && p
+                .getMoveset()
+                .filter(m => m.ppUsed && m.getMovePp() - m.ppUsed <= 5 && m.ppUsed > Math.floor(m.getMovePp() / 2))
+                .length > 0,
+          ).length,
+          3,
+        );
+        return thresholdPartyMemberCount * 3;
+      },
+      9,
+    ),
+    new WeightedModifierType(
+      modifierTypes.MAX_ELIXIR,
+      (party: Pokemon[]) => {
+        const thresholdPartyMemberCount = Math.min(
+          party.filter(
+            p =>
+              p.hp
+              && !p.getHeldItems().some(m => m instanceof BerryModifier && m.berryType === BerryType.LEPPA)
+              && p
+                .getMoveset()
+                .filter(m => m.ppUsed && m.getMovePp() - m.ppUsed <= 5 && m.ppUsed > Math.floor(m.getMovePp() / 2))
+                .length > 0,
+          ).length,
+          3,
+        );
+        return thresholdPartyMemberCount;
+      },
+      3,
+    ),
+     */
     new WeightedModifierType(
       modifierTypes.MAX_POTION,
       (party: Pokemon[]) => {
@@ -210,6 +293,18 @@ function initGreatModifierPool() {
       2,
     ),
     new WeightedModifierType(modifierTypes.SOOTHE_BELL, 2),
+    /**
+    new WeightedModifierType(modifierTypes.TM_GREAT, 3),
+    new WeightedModifierType(
+      modifierTypes.MEMORY_MUSHROOM,
+      () => {
+        const { waveIndex } = globalScene.currentBattle;
+        const modeAdjustedWave = globalScene.gameMode.getWaveForDifficulty(waveIndex, true);
+        return Math.min(1 + Math.floor(modeAdjustedWave / 30), 4);
+      },
+      4,
+    ),
+     */
     new WeightedModifierType(modifierTypes.BASE_STAT_BOOSTER, 3),
     new WeightedModifierType(modifierTypes.TERA_SHARD, (party: Pokemon[]) =>
       party.filter(
@@ -274,8 +369,8 @@ function initUltraModifierPool() {
           // Check if Pokemon's species (or fusion species, if applicable) can evolve or if they're G-Max'd
           if (
             !p.isMax()
-            && (p.getSpeciesForm(true).speciesId in pokemonEvolutions
-              || (p.isFusion() && p.getFusionSpeciesForm(true).speciesId in pokemonEvolutions))
+            && (speciesDataRegistry.hasEvolutions(p.getSpeciesForm(true).speciesId)
+              || (p.isFusion() && speciesDataRegistry.hasEvolutions(p.getFusionSpeciesForm(true).speciesId)))
           ) {
             // Check if Pokemon is already holding an Eviolite
             return !p.getHeldItems().some(i => i.type.id === "EVIOLITE");
@@ -451,6 +546,9 @@ function initUltraModifierPool() {
     new WeightedModifierType(modifierTypes.REVIVER_SEED, 4),
     new WeightedModifierType(modifierTypes.CANDY_JAR, skipInLastClassicWaveOrDefault(5)),
     new WeightedModifierType(modifierTypes.ATTACK_TYPE_BOOSTER, 9),
+    /**
+    new WeightedModifierType(modifierTypes.TM_ULTRA, 11),
+     */
     new WeightedModifierType(modifierTypes.RARER_CANDY, 4),
     new WeightedModifierType(modifierTypes.GOLDEN_PUNCH, skipInLastClassicWaveOrDefault(2)),
     new WeightedModifierType(modifierTypes.IV_SCANNER, skipInLastClassicWaveOrDefault(4)),

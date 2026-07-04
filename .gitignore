@@ -46,6 +46,7 @@ coverage
 
 # Script outputs
 *.csv
+species-output/*
 
 # Batch files
 *.bat
