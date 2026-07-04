@@ -389,6 +389,7 @@ export const SUPERCEDED_MOVES: Partial<Record<MoveId, readonly MoveId[]>> = {
     MoveId.ANCHOR_SHOT,
     MoveId.SMART_STRIKE,
   ],
+  [MoveId.MIRROR_SHOT]: [MoveId.FLASH_CANNON, MoveId.TACHYON_CUTTER],
   [MoveId.NEEDLE_ARM]: [
     MoveId.LEAF_BLADE,
     MoveId.SEED_BOMB,
@@ -580,6 +581,9 @@ export const SUPERCEDED_MOVES: Partial<Record<MoveId, readonly MoveId[]>> = {
   ],
   [MoveId.WING_ATTACK]: [MoveId.DRILL_PECK, MoveId.AERIAL_ACE, MoveId.PLUCK, MoveId.FLOATY_FALL],
 
+  // Superpower is more detrimental to the user over Hammer Arm or Close Combat
+  [MoveId.SUPERPOWER]: [MoveId.HAMMER_ARM, MoveId.CLOSE_COMBAT],
+
   // Setup Moves
   // Technically, defense curl is better than harden because it boosts rollout and ice ball, though not added here
   [MoveId.HARDEN]: SINGLE_STAGE_DEF_BOOST_REPLACEMENTS,
@@ -629,6 +633,8 @@ export const SUPERCEDED_MOVES: Partial<Record<MoveId, readonly MoveId[]>> = {
 
   // Reliable Healing
   [MoveId.REST]: [
+    MoveId.RECOVER,
+    MoveId.ROOST,
     MoveId.MORNING_SUN,
     MoveId.SYNTHESIS,
     MoveId.MOONLIGHT,
@@ -638,5 +644,20 @@ export const SUPERCEDED_MOVES: Partial<Record<MoveId, readonly MoveId[]>> = {
     MoveId.SLACK_OFF,
     MoveId.SOFT_BOILED,
     MoveId.STRENGTH_SAP,
+  ],
+  [MoveId.LIFE_DEW]: [
+    MoveId.RECOVER,
+    MoveId.ROOST,
+    MoveId.MORNING_SUN,
+    MoveId.SYNTHESIS,
+    MoveId.MOONLIGHT,
+    MoveId.HEAL_ORDER,
+    MoveId.SHORE_UP,
+    MoveId.MILK_DRINK,
+    MoveId.SLACK_OFF,
+    MoveId.SOFT_BOILED,
+    MoveId.STRENGTH_SAP,
+    MoveId.LUNAR_BLESSING,
+    MoveId.JUNGLE_HEALING,
   ],
 };
