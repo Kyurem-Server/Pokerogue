@@ -1233,6 +1233,22 @@ export class SummaryUiHandler extends UiHandler {
           const pp = padInt(this.newMove?.pp!, 2, "  "); // TODO: is this bang correct?
           const ppText = addTextObject(178, 1, `${pp}/${pp}`, TextStyle.WINDOW);
           ppText.setOrigin(0, 1);
+          if (this.newMove?.pp === -1) {
+            const widthB = ppText.displayWidth; //width before
+            ppText.setText("  /"); //left align
+            const widthA = ppText.displayWidth; //width after
+
+            const infinities = [
+              addTextObject(178, 1, "∞", TextStyle.WINDOW),
+              addTextObject(178, 1, "∞", TextStyle.WINDOW),
+            ];
+
+            for (let i = 0; i < infinities.length; i++) {
+              infinities[i].setOrigin(1, ppText.originY);
+              infinities[i].setPosition(ppText.x + (widthB - widthA) + i * ppText.displayWidth, ppText.y);
+              this.extraMoveRowContainer.add(infinities[i]);
+            }
+          }
           this.extraMoveRowContainer.add(ppText);
         }
 
@@ -1268,6 +1284,23 @@ export class SummaryUiHandler extends UiHandler {
             const maxPP = move.getMovePp();
             const pp = maxPP - move.ppUsed;
             ppText.setText(`${padInt(pp, 2, "  ")}/${padInt(maxPP, 2, "  ")}`);
+
+            if (maxPP === -1) {
+              const widthB = ppText.displayWidth; //width before
+              ppText.setText("  /"); //left align
+              const widthA = ppText.displayWidth; //width after
+
+              const infinities = [
+                addTextObject(178, 1, "∞", TextStyle.WINDOW),
+                addTextObject(178, 1, "∞", TextStyle.WINDOW),
+              ];
+
+              for (let i = 0; i < infinities.length; i++) {
+                infinities[i].setOrigin(1, ppText.originY);
+                infinities[i].setPosition(ppText.x + (widthB - widthA) + i * ppText.displayWidth, ppText.y);
+                moveRowContainer.add(infinities[i]);
+              }
+            }
           }
 
           moveRowContainer.add(ppText);

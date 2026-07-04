@@ -278,6 +278,23 @@ export class FightUiHandler extends UiHandler implements InfoToggle {
     const ppLeftStr = padInt(pp, 2, "  ");
     const ppMaxStr = padInt(maxPP, 2, "  ");
     this.ppText.setText(`${ppLeftStr}/${ppMaxStr}`);
+    if (maxPP === -1) {
+      this.ppText.setText("/  "); //right align
+
+      const infinities = [
+        addTextObject(globalScene.scaledCanvas.width - 12, -26, "∞", TextStyle.MOVE_INFO_CONTENT),
+        addTextObject(globalScene.scaledCanvas.width - 12, -26, "∞", TextStyle.MOVE_INFO_CONTENT),
+      ];
+
+      for (let i = 0; i < infinities.length; i++) {
+        infinities[i].setOrigin(1, this.ppText.originY);
+        infinities[i].setPosition(
+          this.ppText.x - this.ppText.displayWidth + i * this.ppText.displayWidth,
+          this.ppText.y,
+        );
+        this.moveInfoContainer.add(infinities[i]);
+      }
+    }
     this.powerText.setText(`${power >= 0 ? power : "---"}`);
     this.accuracyText.setText(`${accuracy >= 0 ? accuracy : "---"}`);
 

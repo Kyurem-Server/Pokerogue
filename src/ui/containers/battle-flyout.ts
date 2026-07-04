@@ -146,6 +146,10 @@ export class BattleFlyout extends Phaser.GameObjects.Container {
       if (!moveInfo) {
         continue;
       }
+      if (moveInfo.maxPp === -1) {
+        flyoutText.text = `${moveInfo.move.name}  ∞/∞`;
+        continue;
+      }
 
       const currentPp = moveInfo.maxPp - moveInfo.ppUsed;
       flyoutText.text = `${moveInfo.move.name}  ${currentPp}/${moveInfo.maxPp}`;

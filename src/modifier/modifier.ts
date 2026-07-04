@@ -2174,7 +2174,7 @@ export class PokemonPpRestoreModifier extends ConsumablePokemonMoveModifier {
   override apply(playerPokemon: PlayerPokemon): boolean {
     const move = playerPokemon.getMoveset()[this.moveIndex];
 
-    if (move) {
+    if (move && move.getMovePp() !== -1) {
       move.ppUsed = this.restorePoints > -1 ? Math.max(move.ppUsed - this.restorePoints, 0) : 0;
     }
 
@@ -2198,7 +2198,7 @@ export class PokemonAllMovePpRestoreModifier extends ConsumablePokemonModifier {
    */
   override apply(playerPokemon: PlayerPokemon): boolean {
     for (const move of playerPokemon.getMoveset()) {
-      if (move) {
+      if (move && move.getMovePp() !== -1) {
         move.ppUsed = this.restorePoints > -1 ? Math.max(move.ppUsed - this.restorePoints, 0) : 0;
       }
     }

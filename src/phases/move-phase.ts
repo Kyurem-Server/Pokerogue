@@ -406,7 +406,7 @@ export class MovePhase extends PokemonPhase {
    */
   protected checkPP(): boolean {
     const move = this.move;
-    if (move.getMove().pp !== -1 && !isIgnorePP(this.useMode) && move.ppUsed >= move.getMovePp()) {
+    if (move.getMovePp() !== -1 && !isIgnorePP(this.useMode) && move.ppUsed >= move.getMovePp()) {
       this.cancel();
       this.showFailedText();
       return true;
@@ -654,6 +654,10 @@ export class MovePhase extends PokemonPhase {
   protected usePP(): void {
     if (!isIgnorePP(this.useMode)) {
       const move = this.move;
+      if (move.getMovePp() === -1) {
+        globalScene.eventTarget.dispatchEvent(new MoveUsedEvent(this.pokemon.id, move, move.ppUsed));
+        return;
+      }
       // "commit" to using the move, deducting PP.
       const ppUsed = 1 + this.getPpIncreaseFromPressure(this.getActiveTargetPokemon());
       move.usePp(ppUsed);

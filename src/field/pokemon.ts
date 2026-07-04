@@ -6564,7 +6564,7 @@ export class EnemyPokemon extends Pokemon {
               new PokemonMove(MoveId.FLAMETHROWER),
               new PokemonMove(MoveId.RECOVER, 0, -4),
                */
-              new PokemonMove(MoveId.METRONOME, 0, 3),
+              new PokemonMove(MoveId.METRONOME, 0, 0, -1),
             ]
           : [
               /**

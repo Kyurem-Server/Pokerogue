@@ -1582,6 +1582,10 @@ export class PartyUiHandler extends MessageUiHandler {
             const move = pokemon.moveset[option - PartyOption.MOVE_1];
             if (this.showMovePp) {
               const maxPP = move.getMovePp();
+              if (maxPP === -1) {
+                optionName = `${move.getName()} ∞/∞`;
+                break;
+              }
               const currPP = maxPP - move.ppUsed;
               optionName = `${move.getName()} ${currPP}/${maxPP}`;
             } else {
