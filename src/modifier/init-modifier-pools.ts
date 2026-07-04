@@ -1,4 +1,3 @@
-import { timedEventManager } from "#app/global-event-manager";
 import { globalScene } from "#app/global-scene";
 import { speciesDataRegistry } from "#app/global-species-data-registry";
 import { modifierTypes } from "#data/data-lists";
@@ -308,6 +307,23 @@ function initGreatModifierPool() {
         ? 1
         : 0,
     ),
+    /**
+    new WeightedModifierType(
+      modifierTypes.DNA_SPLICERS,
+      (party: readonly Pokemon[]) => {
+        if (party.filter(p => !p.fusionSpecies).length > 1) {
+          if (globalScene.gameMode.isSplicedOnly) {
+            return 4;
+          }
+          if (globalScene.gameMode.isClassic && timedEventManager.areFusionsBoosted()) {
+            return 2;
+          }
+        }
+        return 0;
+      },
+      4,
+    ),
+     */
     new WeightedModifierType(
       modifierTypes.VOUCHER,
       (_party: readonly Pokemon[], rerollCount: number) =>
@@ -607,6 +623,18 @@ function initMasterModifierPool() {
           : 0,
       5,
     ),
+    /**
+    new WeightedModifierType(
+      modifierTypes.DNA_SPLICERS,
+      (party: Pokemon[]) =>
+        !(globalScene.gameMode.isClassic && timedEventManager.areFusionsBoosted())
+        && !globalScene.gameMode.isSplicedOnly
+        && party.filter(p => !p.fusionSpecies).length > 1
+          ? 24
+          : 0,
+      24,
+    ),
+     */
     new WeightedModifierType(
       modifierTypes.MINI_BLACK_HOLE,
       () =>
