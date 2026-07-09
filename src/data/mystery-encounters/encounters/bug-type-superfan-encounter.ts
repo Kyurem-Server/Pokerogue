@@ -174,8 +174,7 @@ export const BugTypeSuperfanEncounter: MysteryEncounter = MysteryEncounterBuilde
       new TypeRequirement(PokemonType.BUG, false, 1),
     ),
   )
-  .withMaxAllowedEncounters(1)
-  .withSceneWaveRangeRequirement(...CLASSIC_MODE_MYSTERY_ENCOUNTER_WAVES)
+  .withSceneWaveRangeRequirement(30, CLASSIC_MODE_MYSTERY_ENCOUNTER_WAVES[1])
   .withScenePartySizeRequirement(3)
   .withMaxAllowedEncounters(1)
   .withIntroSpriteConfigs([
@@ -190,7 +189,7 @@ export const BugTypeSuperfanEncounter: MysteryEncounter = MysteryEncounterBuilde
       yShadow: -2,
     },
     {
-      spriteKey: "bug_type_superfan",
+      spriteKey: "bug_type_superfan", //Quinn
       fileRoot: "trainer",
       hasShadow: true,
       x: -20,
