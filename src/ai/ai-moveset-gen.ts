@@ -8,6 +8,7 @@
 
 import { EVOLVE_MOVE, RELEARN_MOVE } from "#app/constants";
 import { globalScene } from "#app/global-scene";
+import { speciesDataRegistry } from "#app/global-species-data-registry";
 import { speciesEggMoves } from "#balance/moves/egg-moves";
 import { FORBIDDEN_SINGLES_MOVES, FORBIDDEN_TM_MOVES, LEVEL_BASED_DENYLIST } from "#balance/moves/forbidden-moves";
 import {
@@ -53,7 +54,7 @@ import { PokemonMove } from "#moves/pokemon-move";
 import type { Move } from "#types/move-types";
 import type { LevelMovesWithSource } from "#types/pokemon-species";
 import { NumberHolder, randSeedInt } from "#utils/common";
-import { getPokemonSpecies, willTerastallize } from "#utils/pokemon-utils";
+import { willTerastallize } from "#utils/pokemon-utils";
 import { ValueHolder } from "#utils/value-holder";
 
 /**
@@ -153,7 +154,7 @@ function getTmPoolForSpecies(
   allowedTiers = getAllowedTmTiers(level),
 ): void {
   const [allowCommon, allowGreat, allowUltra] = allowedTiers;
-  const tms = getPokemonSpecies(speciesId).getTms(formKey);
+  const tms = speciesDataRegistry.getSpecies(speciesId).getTms(formKey);
 
   for (const tm of tms) {
     if (FORBIDDEN_TM_MOVES.has(tm) || levelPool.has(tm) || eggPool.has(tm) || tmPool.has(tm)) {
