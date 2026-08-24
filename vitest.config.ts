@@ -1,7 +1,99 @@
-import { defineProject } from "vitest/config";
-import { defaultConfig } from "./vite.config";
-import { BaseSequencer, type TestSpecification } from "vitest/node";
+/*
+ * SPDX-FileCopyrightText: 2024-2025 Pagefault Games
+ *
+ * SPDX-License-Identifier: AGPL-3.0-only
+ */
 
+// NB: We cannot use `#XYZ` imports in this file since `vite-tsconfig-paths` has not been initialized yet.
+
+import type { UserConfig } from "vite";
+import { defineConfig } from "vitest/config";
+import { BaseSequencer, type TestSpecification } from "vitest/node";
+import { TEST_TIMEOUT } from "./test/constants";
+import { CustomDefaultReporter } from "./test/reporters/custom-default-reporter";
+import { sharedConfig } from "./vite.config";
+
+// biome-ignore lint/style/noDefaultExport: required for vitest
+export default defineConfig(async config => {
+  const viteConfig = await sharedConfig(config);
+  const opts: UserConfig = {
+    ...viteConfig,
+    test: {
+      passWithNoTests: false,
+      reporters: process.env.MERGE_REPORTS
+        ? ["github-actions", new CustomDefaultReporter()]
+        : process.env.GITHUB_ACTIONS
+          ? ["blob", new CustomDefaultReporter()]
+          : [new CustomDefaultReporter()],
+      env: {
+        TZ: "UTC",
+      },
+      isolate: false,
+      testTimeout: TEST_TIMEOUT,
+      slowTestThreshold: TEST_TIMEOUT / 2,
+      // TODO: Vitest's current framework produces spurious errors for type tests with this option enabled.
+      // We should move our type tests to a separate folder not covered by normal tests, and then enable the option.
+      // expect: {
+      //   requireAssertions: true,
+      // },
+      setupFiles: ["./test/setup/font-face.setup.ts", "./test/setup/vitest.setup.ts", "./test/setup/matchers.setup.ts"],
+      sequence: {
+        sequencer: MySequencer,
+      },
+      includeTaskLocation: true,
+      environment: "jsdom",
+      environmentOptions: {
+        jsdom: {
+          resources: "usable",
+        },
+      },
+      typecheck: {
+        tsconfig: "tsconfig.json",
+        include: ["./test/tests/types/**/*.{test,spec}-d.ts"],
+      },
+      restoreMocks: true,
+      watch: false,
+      coverage: {
+        provider: "v8",
+        reportsDirectory: "coverage",
+        reporter: process.env.MERGE_REPORTS
+          ? ["text-summary", "json-summary"]
+          : process.env.GITHUB_ACTIONS
+            ? []
+            : ["text-summary", "html"],
+        exclude: ["{src,test}/**/*.d.ts"],
+        include: ["src/**/*.ts", "test/utils/**/*.ts"],
+      },
+      name: "main",
+      include: ["./test/**/*.{test,spec}.ts"],
+    },
+  };
+  return opts;
+});
+
+// #region Helpers
+
+/**
+ * Class for sorting test files in the desired order.
+ */
+class MySequencer extends BaseSequencer {
+  public override async sort(files: TestSpecification[]) {
+    files = await super.sort(files);
+
+    return files.sort((a, b) => {
+      const aTestOrder = getTestOrder(a.moduleId);
+      const bTestOrder = getTestOrder(b.moduleId);
+      return aTestOrder - bTestOrder;
+    });
+  }
+}
+
+/**
+ * A helper function for sorting test files in a desired order.
+ *
+ * A lower number means that a test file must be run earlier,
+ * or else it breaks due to running tests with `--no-isolate.`
+ */
 function getTestOrder(testName: string): number {
   if (testName.includes("battle-scene.test.ts")) {
     return 1;
@@ -12,42 +104,4 @@ function getTestOrder(testName: string): number {
   return 3;
 }
 
-export default defineProject(({ mode }) => ({
-  ...defaultConfig,
-  test: {
-    testTimeout: 20000,
-    setupFiles: ["./test/fontFace.setup.ts", "./test/vitest.setup.ts"],
-    sequence: {
-      sequencer: class CustomSequencer extends BaseSequencer {
-        async sort(files: TestSpecification[]) {
-          // use default sorting at first.
-          files = await super.sort(files);
-          // Except, forcibly reorder
-
-          return files.sort((a, b) => getTestOrder(a.moduleId) - getTestOrder(b.moduleId));
-        }
-      },
-    },
-    environment: "jsdom" as const,
-    environmentOptions: {
-      jsdom: {
-        resources: "usable",
-      },
-    },
-    threads: false,
-    trace: true,
-    restoreMocks: true,
-    watch: false,
-    coverage: {
-      provider: "istanbul" as const,
-      reportsDirectory: "coverage" as const,
-      reporters: ["text-summary", "html"],
-    },
-    name: "main",
-    include: ["./test/**/*.{test,spec}.ts"],
-  },
-  esbuild: {
-    pure: mode === "production" ? ["console.log"] : [],
-    keepNames: true,
-  },
-}));
+// #endregion Helpers

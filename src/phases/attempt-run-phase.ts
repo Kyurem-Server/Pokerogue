@@ -1,10 +1,13 @@
-import { applyAbAttrs } from "#app/data/abilities/apply-ab-attrs";
+import { applyAbAttrs } from "#abilities/apply-ab-attrs";
+import { audioManager } from "#app/global-audio-manager";
 import { globalScene } from "#app/global-scene";
-import Overrides from "#app/overrides";
-import { FieldPhase } from "#app/phases/field-phase";
-import { NumberHolder } from "#app/utils/common";
+import { activeOverrides } from "#app/overrides";
+import { ArenaTagSide } from "#enums/arena-tag-side";
 import { Stat } from "#enums/stat";
 import { StatusEffect } from "#enums/status-effect";
+import { FieldPhase } from "#phases/field-phase";
+import { NumberHolder } from "#utils/common";
+import { inSpeedOrder } from "#utils/speed-order-generator";
 import i18next from "i18next";
 
 export class AttemptRunPhase extends FieldPhase {
@@ -15,21 +18,19 @@ export class AttemptRunPhase extends FieldPhase {
 
     // Increment escape attempts count on entry
     const currentAttempts = globalScene.currentBattle.escapeAttempts++;
-
-    const activePlayerField = globalScene.getPlayerField(true);
     const enemyField = globalScene.getEnemyField();
 
     const escapeRoll = globalScene.randBattleSeedInt(100);
     const escapeChance = new NumberHolder(this.calculateEscapeChance(currentAttempts));
 
-    activePlayerField.forEach(pokemon => {
+    for (const pokemon of inSpeedOrder(ArenaTagSide.PLAYER)) {
       applyAbAttrs("RunSuccessAbAttr", { pokemon, chance: escapeChance });
-    });
+    }
 
     if (escapeRoll < escapeChance.value) {
       enemyField.forEach(pokemon => applyAbAttrs("PreLeaveFieldAbAttr", { pokemon }));
 
-      globalScene.playSound("se/flee");
+      audioManager.playSound("se/flee");
       globalScene.phaseManager.queueMessage(i18next.t("battle:runAwaySuccess"), null, true, 500);
 
       globalScene.tweens.add({
@@ -45,7 +46,7 @@ export class AttemptRunPhase extends FieldPhase {
       enemyField.forEach(enemyPokemon => {
         enemyPokemon.hideInfo().then(() => enemyPokemon.destroy());
         enemyPokemon.hp = 0;
-        enemyPokemon.trySetStatus(StatusEffect.FAINT);
+        enemyPokemon.doSetStatus(StatusEffect.FAINT);
       });
 
       globalScene.phaseManager.pushNew("BattleEndPhase", false);
@@ -56,7 +57,7 @@ export class AttemptRunPhase extends FieldPhase {
 
       globalScene.phaseManager.pushNew("NewBattlePhase");
     } else {
-      activePlayerField.forEach(p => {
+      globalScene.getPlayerField(true).forEach(p => {
         p.turnData.failedRunAway = true;
       });
 
@@ -74,8 +75,8 @@ export class AttemptRunPhase extends FieldPhase {
    */
   public calculateEscapeChance(escapeAttempts: number): number {
     //   Check for override, guaranteeing or forbidding random flee attempts as applicable.
-    if (Overrides.RUN_SUCCESS_OVERRIDE !== null) {
-      return Overrides.RUN_SUCCESS_OVERRIDE ? 100 : 0;
+    if (activeOverrides.RUN_SUCCESS_OVERRIDE !== null) {
+      return activeOverrides.RUN_SUCCESS_OVERRIDE ? 100 : 0;
     }
 
     const enemyField = globalScene.getEnemyField();

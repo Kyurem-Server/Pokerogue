@@ -1,43 +1,44 @@
+import { audioManager } from "#app/global-audio-manager";
 import { globalScene } from "#app/global-scene";
-import type { ModifierTier } from "#enums/modifier-tier";
-import type { ModifierTypeOption, ModifierType } from "#app/modifier/modifier-type";
-import {
-  regenerateModifierPoolThresholds,
-  getPlayerShopModifierTypeOptionsForWave,
-  PokemonModifierType,
-  FusePokemonModifierType,
-  PokemonMoveModifierType,
-  TmModifierType,
-  RememberMoveModifierType,
-  PokemonPpRestoreModifierType,
-  PokemonPpUpModifierType,
-  getPlayerModifierTypeOptions,
-} from "#app/modifier/modifier-type";
+import { activeOverrides } from "#app/overrides";
 import { ModifierPoolType } from "#enums/modifier-pool-type";
-import type { Modifier } from "#app/modifier/modifier";
+import type { ModifierTier } from "#enums/modifier-tier";
+import { PartyUiMode } from "#enums/party-ui-mode";
+import { UiMode } from "#enums/ui-mode";
+import type { Modifier } from "#modifiers/modifier";
 import {
   ExtraModifierModifier,
   HealShopCostModifier,
   PokemonHeldItemModifier,
   TempExtraModifierModifier,
-} from "#app/modifier/modifier";
-import type ModifierSelectUiHandler from "#app/ui/modifier-select-ui-handler";
-import { SHOP_OPTIONS_ROW_LIMIT } from "#app/ui/modifier-select-ui-handler";
-import PartyUiHandler, { PartyUiMode, PartyOption } from "#app/ui/party-ui-handler";
-import { UiMode } from "#enums/ui-mode";
+} from "#modifiers/modifier";
+import type { CustomModifierSettings, ModifierType, ModifierTypeOption } from "#modifiers/modifier-type";
+import {
+  FusePokemonModifierType,
+  getPlayerModifierTypeOptions,
+  getPlayerShopModifierTypeOptionsForWave,
+  PokemonModifierType,
+  PokemonMoveModifierType,
+  PokemonPpRestoreModifierType,
+  PokemonPpUpModifierType,
+  RememberMoveModifierType,
+  regenerateModifierPoolThresholds,
+  TmModifierType,
+} from "#modifiers/modifier-type";
+import { BattlePhase } from "#phases/battle-phase";
+import type { ModifierSelectUiHandler } from "#ui/modifier-select-ui-handler";
+import { SHOP_OPTIONS_ROW_LIMIT } from "#ui/modifier-select-ui-handler";
+import { PartyOption, PartyUiHandler } from "#ui/party-ui-handler";
+import { NumberHolder } from "#utils/common";
 import i18next from "i18next";
-import { BattlePhase } from "./battle-phase";
-import Overrides from "#app/overrides";
-import type { CustomModifierSettings } from "#app/modifier/modifier-type";
-import { isNullOrUndefined, NumberHolder } from "#app/utils/common";
 
 export type ModifierSelectCallback = (rowCursor: number, cursor: number) => boolean;
 
 export class SelectModifierPhase extends BattlePhase {
   public readonly phaseName = "SelectModifierPhase";
   private rerollCount: number;
-  private modifierTiers?: ModifierTier[];
-  private customModifierSettings?: CustomModifierSettings;
+  private modifierTiers?: ModifierTier[] | undefined;
+  private customModifierSettings?: CustomModifierSettings | undefined;
   private isCopy: boolean;
 
   private typeOptions: ModifierTypeOption[];
@@ -157,7 +158,7 @@ export class SelectModifierPhase extends BattlePhase {
     globalScene.applyModifier(HealShopCostModifier, true, healingItemCost);
     const cost = healingItemCost.value;
 
-    if (globalScene.money < cost && !Overrides.WAIVE_ROLL_FEE_OVERRIDE) {
+    if (globalScene.money < cost && !activeOverrides.WAIVE_ROLL_FEE_OVERRIDE) {
       globalScene.ui.playError();
       return false;
     }
@@ -178,9 +179,9 @@ export class SelectModifierPhase extends BattlePhase {
         this.openModifierMenu(modifierType, cost, modifierSelectCallback);
       }
     } else {
-      this.applyModifier(modifierType.newModifier()!);
+      this.applyModifier(modifierType.newModifier()!, cost);
     }
-    return !cost;
+    return cost === -1;
   }
 
   // Reroll rewards
@@ -198,12 +199,12 @@ export class SelectModifierPhase extends BattlePhase {
     );
     globalScene.ui.clearText();
     globalScene.ui.setMode(UiMode.MESSAGE).then(() => super.end());
-    if (!Overrides.WAIVE_ROLL_FEE_OVERRIDE) {
+    if (!activeOverrides.WAIVE_ROLL_FEE_OVERRIDE) {
       globalScene.money -= rerollCost;
       globalScene.updateMoneyText();
       globalScene.animateMoneyChanged(false);
     }
-    globalScene.playSound("se/buy");
+    audioManager.playSound("se/buy");
     return true;
   }
 
@@ -216,11 +217,11 @@ export class SelectModifierPhase extends BattlePhase {
       -1,
       (fromSlotIndex: number, itemIndex: number, itemQuantity: number, toSlotIndex: number) => {
         if (
-          toSlotIndex !== undefined &&
-          fromSlotIndex < 6 &&
-          toSlotIndex < 6 &&
-          fromSlotIndex !== toSlotIndex &&
-          itemIndex > -1
+          toSlotIndex !== undefined
+          && fromSlotIndex < 6
+          && toSlotIndex < 6
+          && fromSlotIndex !== toSlotIndex
+          && itemIndex > -1
         ) {
           const itemModifiers = globalScene.findModifiers(
             m => m instanceof PokemonHeldItemModifier && m.isTransferable && m.pokemonId === party[fromSlotIndex].id,
@@ -277,12 +278,12 @@ export class SelectModifierPhase extends BattlePhase {
 
     if (cost !== -1 && !(modifier.type instanceof RememberMoveModifierType)) {
       if (result) {
-        if (!Overrides.WAIVE_ROLL_FEE_OVERRIDE) {
+        if (!activeOverrides.WAIVE_ROLL_FEE_OVERRIDE) {
           globalScene.money -= cost;
           globalScene.updateMoneyText();
           globalScene.animateMoneyChanged(false);
         }
-        globalScene.playSound("se/buy");
+        audioManager.playSound("se/buy");
         (globalScene.ui.getHandler() as ModifierSelectUiHandler).updateCostText();
       } else {
         globalScene.ui.playError();
@@ -307,10 +308,10 @@ export class SelectModifierPhase extends BattlePhase {
       -1,
       (fromSlotIndex: number, spliceSlotIndex: number) => {
         if (
-          spliceSlotIndex !== undefined &&
-          fromSlotIndex < 6 &&
-          spliceSlotIndex < 6 &&
-          fromSlotIndex !== spliceSlotIndex
+          spliceSlotIndex !== undefined
+          && fromSlotIndex < 6
+          && spliceSlotIndex < 6
+          && fromSlotIndex !== spliceSlotIndex
         ) {
           globalScene.ui.setMode(UiMode.MODIFIER_SELECT, this.isPlayer()).then(() => {
             const modifier = modifierType.newModifier(party[fromSlotIndex], party[spliceSlotIndex])!; //TODO: is the bang correct?
@@ -352,11 +353,11 @@ export class SelectModifierPhase extends BattlePhase {
       (slotIndex: number, option: PartyOption) => {
         if (slotIndex < 6) {
           globalScene.ui.setMode(UiMode.MODIFIER_SELECT, this.isPlayer()).then(() => {
-            const modifier = !isMoveModifier
-              ? !isRememberMoveModifier
-                ? modifierType.newModifier(party[slotIndex])
-                : modifierType.newModifier(party[slotIndex], option as number)
-              : modifierType.newModifier(party[slotIndex], option - PartyOption.MOVE_1);
+            const modifier = isMoveModifier
+              ? modifierType.newModifier(party[slotIndex], option - PartyOption.MOVE_1)
+              : isRememberMoveModifier
+                ? modifierType.newModifier(party[slotIndex], option as number)
+                : modifierType.newModifier(party[slotIndex]);
             this.applyModifier(modifier!, cost, true); // TODO: is the bang correct?
           });
         } else {
@@ -381,9 +382,9 @@ export class SelectModifierPhase extends BattlePhase {
     // If custom modifiers are specified, overrides default item count
     if (this.customModifierSettings) {
       const newItemCount =
-        (this.customModifierSettings.guaranteedModifierTiers?.length ?? 0) +
-        (this.customModifierSettings.guaranteedModifierTypeOptions?.length ?? 0) +
-        (this.customModifierSettings.guaranteedModifierTypeFuncs?.length ?? 0);
+        (this.customModifierSettings.guaranteedModifierTiers?.length ?? 0)
+        + (this.customModifierSettings.guaranteedModifierTypeOptions?.length ?? 0)
+        + (this.customModifierSettings.guaranteedModifierTypeFuncs?.length ?? 0);
       if (this.customModifierSettings.fillRemaining) {
         const originalCount = modifierCountHolder.value;
         modifierCountHolder.value = originalCount > newItemCount ? originalCount : newItemCount;
@@ -417,7 +418,7 @@ export class SelectModifierPhase extends BattlePhase {
 
   getRerollCost(lockRarities: boolean): number {
     let baseValue = 0;
-    if (Overrides.WAIVE_ROLL_FEE_OVERRIDE) {
+    if (activeOverrides.WAIVE_ROLL_FEE_OVERRIDE) {
       return baseValue;
     }
     if (lockRarities) {
@@ -430,7 +431,7 @@ export class SelectModifierPhase extends BattlePhase {
     }
 
     let multiplier = 1;
-    if (!isNullOrUndefined(this.customModifierSettings?.rerollMultiplier)) {
+    if (this.customModifierSettings?.rerollMultiplier != null) {
       if (this.customModifierSettings.rerollMultiplier < 0) {
         // Completely overrides reroll cost to -1 and early exits
         return -1;

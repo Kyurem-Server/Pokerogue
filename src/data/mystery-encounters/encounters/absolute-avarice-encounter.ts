@@ -1,44 +1,46 @@
-import type { EnemyPartyConfig } from "#app/data/mystery-encounters/utils/encounter-phase-utils";
+import { audioManager } from "#app/global-audio-manager";
+import { globalScene } from "#app/global-scene";
+import { speciesDataRegistry } from "#app/global-species-data-registry";
+import { modifierTypes } from "#data/data-lists";
+import { BattlerIndex } from "#enums/battler-index";
+import { BattlerTagType } from "#enums/battler-tag-type";
+import type { BerryType } from "#enums/berry-type";
+import { MoveId } from "#enums/move-id";
+import { MoveUseMode } from "#enums/move-use-mode";
+import { MysteryEncounterOptionMode } from "#enums/mystery-encounter-option-mode";
+import { MysteryEncounterTier } from "#enums/mystery-encounter-tier";
+import { MysteryEncounterType } from "#enums/mystery-encounter-type";
+import { PokeballType } from "#enums/pokeball";
+import { SpeciesId } from "#enums/species-id";
+import { Stat } from "#enums/stat";
+import { TrainerSlot } from "#enums/trainer-slot";
+import type { Pokemon } from "#field/pokemon";
+import { EnemyPokemon } from "#field/pokemon";
+import { BerryModifier, PokemonInstantReviveModifier } from "#modifiers/modifier";
+import type { BerryModifierType, PokemonHeldItemModifierType } from "#modifiers/modifier-type";
+import { PokemonMove } from "#moves/pokemon-move";
+import { queueEncounterMessage } from "#mystery-encounters/encounter-dialogue-utils";
+import type { EnemyPartyConfig } from "#mystery-encounters/encounter-phase-utils";
 import {
   generateModifierType,
   initBattleWithEnemyConfig,
   leaveEncounterWithoutBattle,
   setEncounterRewards,
   transitionMysteryEncounterIntroVisuals,
-} from "#app/data/mystery-encounters/utils/encounter-phase-utils";
-import type Pokemon from "#app/field/pokemon";
-import { EnemyPokemon } from "#app/field/pokemon";
-import { PokemonMove } from "#app/data/moves/pokemon-move";
-import type { BerryModifierType, PokemonHeldItemModifierType } from "#app/modifier/modifier-type";
-import { modifierTypes } from "#app/data/data-lists";
-import { MysteryEncounterType } from "#enums/mystery-encounter-type";
-import { SpeciesId } from "#enums/species-id";
-import { globalScene } from "#app/global-scene";
-import type MysteryEncounter from "#app/data/mystery-encounters/mystery-encounter";
-import { MysteryEncounterBuilder } from "#app/data/mystery-encounters/mystery-encounter";
-import { MysteryEncounterOptionBuilder } from "#app/data/mystery-encounters/mystery-encounter-option";
-import { PersistentModifierRequirement } from "#app/data/mystery-encounters/mystery-encounter-requirements";
-import { queueEncounterMessage } from "#app/data/mystery-encounters/utils/encounter-dialogue-utils";
-import { MysteryEncounterTier } from "#enums/mystery-encounter-tier";
-import { MysteryEncounterOptionMode } from "#enums/mystery-encounter-option-mode";
-import { BerryModifier, PokemonInstantReviveModifier } from "#app/modifier/modifier";
-import { getPokemonSpecies } from "#app/utils/pokemon-utils";
-import { MoveId } from "#enums/move-id";
-import { BattlerTagType } from "#enums/battler-tag-type";
-import { randInt } from "#app/utils/common";
-import { BattlerIndex } from "#enums/battler-index";
+} from "#mystery-encounters/encounter-phase-utils";
 import {
   applyModifierTypeToPlayerPokemon,
   catchPokemon,
   getHighestLevelPlayerPokemon,
-} from "#app/data/mystery-encounters/utils/encounter-pokemon-utils";
-import { TrainerSlot } from "#enums/trainer-slot";
-import { PokeballType } from "#enums/pokeball";
-import type HeldModifierConfig from "#app/@types/held-modifier-config";
-import type { BerryType } from "#enums/berry-type";
-import { Stat } from "#enums/stat";
+} from "#mystery-encounters/encounter-pokemon-utils";
+import type { MysteryEncounter } from "#mystery-encounters/mystery-encounter";
+import { MysteryEncounterBuilder } from "#mystery-encounters/mystery-encounter";
+import { MysteryEncounterOptionBuilder } from "#mystery-encounters/mystery-encounter-option";
+import { PersistentModifierRequirement } from "#mystery-encounters/mystery-encounter-requirements";
+import type { HeldModifierConfig } from "#types/held-modifier-config";
+import { randInt } from "#utils/common";
+import { groupStatChange } from "#utils/stat-change";
 import i18next from "i18next";
-import { MoveUseMode } from "#enums/move-use-mode";
 
 /** the i18n namespace for this encounter */
 const namespace = "mysteryEncounters/absoluteAvarice";
@@ -188,8 +190,9 @@ export const AbsoluteAvariceEncounter: MysteryEncounter = MysteryEncounterBuilde
   .withOnInit(() => {
     const encounter = globalScene.currentBattle.mysteryEncounter!;
 
-    globalScene.loadSe("PRSFX- Bug Bite", "battle_anims", "PRSFX- Bug Bite.wav");
-    globalScene.loadSe("Follow Me", "battle_anims", "Follow Me.mp3");
+    globalScene
+      .loadSe("PRSFX- Bug Bite", "battle_anims", "PRSFX- Bug Bite.wav")
+      .loadSe("Follow Me", "battle_anims", "Follow Me.wav");
 
     // Get all player berry items, remove from party, and store reference
     const berryItems = globalScene.findModifiers(m => m instanceof BerryModifier) as BerryModifier[];
@@ -229,7 +232,7 @@ export const AbsoluteAvariceEncounter: MysteryEncounter = MysteryEncounterBuilde
       levelAdditiveModifier: 1,
       pokemonConfigs: [
         {
-          species: getPokemonSpecies(SpeciesId.GREEDENT),
+          species: speciesDataRegistry.getSpecies(SpeciesId.GREEDENT),
           isBoss: true,
           bossSegments: 3,
           shiny: false, // Shiny lock because of consistency issues between the different options
@@ -237,21 +240,19 @@ export const AbsoluteAvariceEncounter: MysteryEncounter = MysteryEncounterBuilde
           modifierConfigs: bossModifierConfigs,
           tags: [BattlerTagType.MYSTERY_ENCOUNTER_POST_SUMMON],
           mysteryEncounterBattleEffects: (pokemon: Pokemon) => {
-            queueEncounterMessage(`${namespace}:option.1.boss_enraged`);
-            globalScene.phaseManager.unshiftNew(
-              "StatStageChangePhase",
-              pokemon.getBattlerIndex(),
-              true,
-              statChangesForBattle,
-              1,
-            );
+            queueEncounterMessage(`${namespace}:option.1.bossEnraged`);
+            globalScene.phaseManager.unshiftNew("StatStageChangePhase", {
+              battlerIndex: pokemon.getBattlerIndex(),
+              changes: groupStatChange(statChangesForBattle, 1),
+              sourcePokemon: pokemon,
+            });
           },
         },
       ],
     };
 
     encounter.enemyPartyConfigs = [config];
-    encounter.setDialogueToken("greedentName", getPokemonSpecies(SpeciesId.GREEDENT).getName());
+    encounter.setDialogueToken("greedentName", speciesDataRegistry.getSpecies(SpeciesId.GREEDENT).getName());
 
     return true;
   })
@@ -300,7 +301,7 @@ export const AbsoluteAvariceEncounter: MysteryEncounter = MysteryEncounterBuilde
               globalScene.addModifier(seedModifier, false, false, false, true);
             }
           });
-          queueEncounterMessage(`${namespace}:option.1.food_stash`);
+          queueEncounterMessage(`${namespace}:option.1.foodStash`);
         };
 
         setEncounterRewards({ fillRemaining: true }, undefined, givePartyPokemonReviverSeeds);
@@ -378,7 +379,13 @@ export const AbsoluteAvariceEncounter: MysteryEncounter = MysteryEncounterBuilde
         // Let it have the food
         // Greedent joins the team, level equal to 2 below highest party member (shiny locked)
         const level = getHighestLevelPlayerPokemon(false, true).level - 2;
-        const greedent = new EnemyPokemon(getPokemonSpecies(SpeciesId.GREEDENT), level, TrainerSlot.NONE, false, true);
+        const greedent = new EnemyPokemon(
+          speciesDataRegistry.getSpecies(SpeciesId.GREEDENT),
+          level,
+          TrainerSlot.NONE,
+          false,
+          true,
+        );
         greedent.moveset = [
           new PokemonMove(MoveId.THRASH),
           new PokemonMove(MoveId.BODY_PRESS),
@@ -401,7 +408,7 @@ function doGreedentSpriteSteal() {
 
   const greedentSprites = globalScene.currentBattle.mysteryEncounter!.introVisuals?.getSpriteAtIndex(1);
 
-  globalScene.playSound("battle_anims/Follow Me");
+  audioManager.playSound("battle_anims/Follow Me");
   globalScene.tweens.chain({
     targets: greedentSprites,
     tweens: [
@@ -492,11 +499,11 @@ function doGreedentEatBerries() {
     y: "-=8",
     loop: 5,
     onStart: () => {
-      globalScene.playSound("battle_anims/PRSFX- Bug Bite");
+      audioManager.playSound("battle_anims/PRSFX- Bug Bite");
     },
     onLoop: () => {
       if (index % 2 === 0) {
-        globalScene.playSound("battle_anims/PRSFX- Bug Bite");
+        audioManager.playSound("battle_anims/PRSFX- Bug Bite");
       }
       index++;
     },
@@ -527,7 +534,8 @@ function doBerrySpritePile(isEat = false) {
   const encounter = globalScene.currentBattle.mysteryEncounter!;
   animationOrder.forEach((berry, i) => {
     const introVisualsIndex = encounter.spriteConfigs.findIndex(config => config.spriteKey?.includes(berry));
-    let sprite: Phaser.GameObjects.Sprite, tintSprite: Phaser.GameObjects.Sprite;
+    let sprite: Phaser.GameObjects.Sprite;
+    let tintSprite: Phaser.GameObjects.Sprite;
     const sprites = encounter.introVisuals?.getSpriteAtIndex(introVisualsIndex);
     if (sprites) {
       sprite = sprites[0];
@@ -566,7 +574,7 @@ function doBerryBounce(berrySprites: Phaser.GameObjects.Sprite[], yd: number, ba
         bouncePower = bouncePower > 0.01 ? bouncePower * 0.5 : 0;
 
         if (bouncePower) {
-          bounceYOffset = bounceYOffset * bouncePower;
+          bounceYOffset *= bouncePower;
 
           globalScene.tweens.add({
             targets: berrySprites,

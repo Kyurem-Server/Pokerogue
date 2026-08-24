@@ -1,19 +1,21 @@
-import type Phaser from "phaser";
-import { UiMode } from "#enums/ui-mode";
-import type { InputsController } from "./inputs-controller";
-import type MessageUiHandler from "./ui/message-ui-handler";
-import StarterSelectUiHandler from "./ui/starter-select-ui-handler";
-import { Setting, SettingKeys, settingIndex } from "./system/settings/settings";
-import SettingsUiHandler from "./ui/settings/settings-ui-handler";
-import { Button } from "#enums/buttons";
-import SettingsGamepadUiHandler from "./ui/settings/settings-gamepad-ui-handler";
-import SettingsKeyboardUiHandler from "#app/ui/settings/settings-keyboard-ui-handler";
+import { audioManager } from "#app/global-audio-manager";
 import { globalScene } from "#app/global-scene";
-import SettingsDisplayUiHandler from "./ui/settings/settings-display-ui-handler";
-import SettingsAudioUiHandler from "./ui/settings/settings-audio-ui-handler";
-import RunInfoUiHandler from "./ui/run-info-ui-handler";
-import PokedexUiHandler from "./ui/pokedex-ui-handler";
-import PokedexPageUiHandler from "./ui/pokedex-page-ui-handler";
+import type { InputsController } from "#app/inputs-controller";
+import { isDev } from "#constants/app-constants";
+import { Button } from "#enums/buttons";
+import { UiMode } from "#enums/ui-mode";
+import { Setting, SettingKeys, settingIndex } from "#system/settings";
+import { SettingsAudioUiHandler } from "#ui/audio-settings-ui-handler";
+import { SettingsDisplayUiHandler } from "#ui/display-settings-ui-handler";
+import { SettingsGamepadUiHandler } from "#ui/gamepad-settings-ui-handler";
+import { SettingsKeyboardUiHandler } from "#ui/keyboard-settings-ui-handler";
+import type { MessageUiHandler } from "#ui/message-ui-handler";
+import { PokedexPageUiHandler } from "#ui/pokedex-page-ui-handler";
+import { PokedexUiHandler } from "#ui/pokedex-ui-handler";
+import { RunInfoUiHandler } from "#ui/run-info-ui-handler";
+import { SettingsUiHandler } from "#ui/settings-ui-handler";
+import { StarterSelectUiHandler } from "#ui/starter-select-ui-handler";
+import Phaser from "phaser";
 
 type ActionKeys = Record<Button, () => void>;
 
@@ -34,7 +36,7 @@ export class UiInputs {
   detectInputMethod(evt): void {
     if (evt.controller_type === "keyboard") {
       //if the touch property is present and defined, then this is a simulated keyboard event from the touch screen
-      if (evt.hasOwnProperty("isTouch") && evt.isTouch) {
+      if (Object.hasOwn(evt, "isTouch") && evt.isTouch) {
         globalScene.inputMethod = "touch";
       } else {
         globalScene.inputMethod = "keyboard";
@@ -51,7 +53,7 @@ export class UiInputs {
         this.detectInputMethod(event);
 
         const actions = this.getActionsKeyDown();
-        if (!actions.hasOwnProperty(event.button)) {
+        if (!Object.hasOwn(actions, event.button)) {
           return;
         }
         actions[event.button]();
@@ -63,7 +65,7 @@ export class UiInputs {
       "input_up",
       event => {
         const actions = this.getActionsKeyUp();
-        if (!actions.hasOwnProperty(event.button)) {
+        if (!Object.hasOwn(actions, event.button)) {
           return;
         }
         actions[event.button]();
@@ -97,29 +99,35 @@ export class UiInputs {
       [Button.CYCLE_TERA]: () => this.buttonCycleOption(Button.CYCLE_TERA),
       [Button.SPEED_UP]: () => this.buttonSpeedChange(),
       [Button.SLOW_DOWN]: () => this.buttonSpeedChange(false),
+      [Button.DEV_CUSTOM]: () => {
+        if (isDev) {
+          import("./dev-function").then(m => m.customDevFunction());
+        }
+      },
     };
     return actions;
   }
 
   getActionsKeyUp(): ActionKeys {
     const actions: ActionKeys = {
-      [Button.UP]: () => undefined,
-      [Button.DOWN]: () => undefined,
-      [Button.LEFT]: () => undefined,
-      [Button.RIGHT]: () => undefined,
-      [Button.SUBMIT]: () => undefined,
-      [Button.ACTION]: () => undefined,
-      [Button.CANCEL]: () => undefined,
-      [Button.MENU]: () => undefined,
+      [Button.UP]: () => {},
+      [Button.DOWN]: () => {},
+      [Button.LEFT]: () => {},
+      [Button.RIGHT]: () => {},
+      [Button.SUBMIT]: () => {},
+      [Button.ACTION]: () => {},
+      [Button.CANCEL]: () => {},
+      [Button.MENU]: () => {},
       [Button.STATS]: () => this.buttonStats(false),
-      [Button.CYCLE_SHINY]: () => undefined,
-      [Button.CYCLE_FORM]: () => undefined,
-      [Button.CYCLE_GENDER]: () => undefined,
-      [Button.CYCLE_ABILITY]: () => undefined,
-      [Button.CYCLE_NATURE]: () => undefined,
+      [Button.CYCLE_SHINY]: () => {},
+      [Button.CYCLE_FORM]: () => {},
+      [Button.CYCLE_GENDER]: () => {},
+      [Button.CYCLE_ABILITY]: () => {},
+      [Button.CYCLE_NATURE]: () => {},
       [Button.CYCLE_TERA]: () => this.buttonInfo(false),
-      [Button.SPEED_UP]: () => undefined,
-      [Button.SLOW_DOWN]: () => undefined,
+      [Button.SPEED_UP]: () => {},
+      [Button.SLOW_DOWN]: () => {},
+      [Button.DEV_CUSTOM]: () => {},
     };
     return actions;
   }
@@ -195,7 +203,7 @@ export class UiInputs {
         break;
       case UiMode.MENU:
         globalScene.ui.revertMode();
-        globalScene.playSound("ui/select");
+        audioManager.playSound("ui/select");
         break;
       default:
         return;
@@ -224,25 +232,26 @@ export class UiInputs {
 
   buttonSpeedChange(up = true): void {
     const settingGameSpeed = settingIndex(SettingKeys.Game_Speed);
+    const settingOptions = Setting[settingGameSpeed].options;
+    let currentSetting = settingOptions.findIndex(item => item.value === globalScene.gameSpeed.toString());
+    // if current setting is -1, then the current game speed is not a valid option, so default to index 1 (3x)
+    if (currentSetting === -1) {
+      currentSetting = 1;
+    }
+    let direction: number;
     if (up && globalScene.gameSpeed < 5) {
-      globalScene.gameData.saveSetting(
-        SettingKeys.Game_Speed,
-        Setting[settingGameSpeed].options.findIndex(item => item.label === `${globalScene.gameSpeed}x`) + 1,
-      );
-      if (globalScene.ui?.getMode() === UiMode.SETTINGS) {
-        (globalScene.ui.getHandler() as SettingsUiHandler).show([]);
-      }
-    } else if (!up && globalScene.gameSpeed > 1) {
-      globalScene.gameData.saveSetting(
-        SettingKeys.Game_Speed,
-        Math.max(
-          Setting[settingGameSpeed].options.findIndex(item => item.label === `${globalScene.gameSpeed}x`) - 1,
-          0,
-        ),
-      );
-      if (globalScene.ui?.getMode() === UiMode.SETTINGS) {
-        (globalScene.ui.getHandler() as SettingsUiHandler).show([]);
-      }
+      direction = 1;
+    } else if (!up && globalScene.gameSpeed > 2) {
+      direction = -1;
+    } else {
+      return;
+    }
+    globalScene.gameData.saveSetting(
+      SettingKeys.Game_Speed,
+      Phaser.Math.Clamp(currentSetting + direction, 0, settingOptions.length - 1),
+    );
+    if (globalScene.ui?.getMode() === UiMode.SETTINGS) {
+      (globalScene.ui.getHandler() as SettingsUiHandler).show([]);
     }
   }
 }

@@ -1,7 +1,7 @@
 import { globalScene } from "#app/global-scene";
-import type { PlayerPokemon } from "#app/field/pokemon";
-import type { StarterDataEntry } from "#app/system/game-data";
-import type { DexEntry } from "#app/@types/dex-data";
+import type { PlayerPokemon } from "#field/pokemon";
+import type { DexEntry } from "#types/dex-data";
+import type { StarterDataEntry } from "#types/save-data";
 
 /**
  * Stores data associated with a specific egg and the hatched pokemon
@@ -9,6 +9,8 @@ import type { DexEntry } from "#app/@types/dex-data";
  */
 export class EggHatchData {
   /** the pokemon that hatched from the file (including shiny, IVs, ability) */
+  // TODO: Store the data in a more lightweight manner that does not require creating a PlayerPokemon object in full
+  // (all we need is the species, ability, nature, IVs and shininess/variant)
   public pokemon: PlayerPokemon;
   /** index of the egg move from the hatched pokemon (not stored in PlayerPokemon) */
   public eggMoveIndex: number;
@@ -47,6 +49,7 @@ export class EggHatchData {
       caughtCount: currDexEntry.caughtCount,
       hatchedCount: currDexEntry.hatchedCount,
       ivs: [...currDexEntry.ivs],
+      ribbons: currDexEntry.ribbons,
     };
     this.starterDataEntryBeforeUpdate = {
       moveset: currStarterDataEntry.moveset,

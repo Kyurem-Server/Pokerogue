@@ -1,6 +1,8 @@
 export enum FormChangeItem {
   NONE,
 
+  // #region Mega Stones
+
   ABOMASITE,
   ABSOLITE,
   AERODACTYLITE,
@@ -50,7 +52,58 @@ export enum FormChangeItem {
   TYRANITARITE,
   VENUSAURITE,
 
-  BLUE_ORB = 50,
+  CLEFABLITE,
+  VICTREEBELITE,
+  STARMINITE,
+  DRAGONINITE,
+  MEGANIUMITE,
+  FERALIGITE,
+  SKARMORITE,
+  FROSLASSITE,
+  EMBOARITE,
+  EXCADRITE,
+  SCOLIPITE,
+  SCRAFTINITE,
+  EELEKTROSSITE,
+  CHANDELURITE,
+  CHESNAUGHTITE,
+  DELPHOXITE,
+  GRENINJITE,
+  PYROARITE,
+  FLOETTITE,
+  MALAMARITE,
+  BARBARACITE,
+  DRAGALGITE,
+  HAWLUCHANITE,
+  ZYGARDITE,
+  DRAMPANITE,
+  FALINKSITE,
+
+  RAICHUNITE_X,
+  RAICHUNITE_Y,
+  CHIMECHITE,
+  ABSOLITE_Z,
+  STARAPTITE,
+  GARCHOMPITE_Z,
+  LUCARIONITE_Z,
+  HEATRANITE,
+  DARKRANITE,
+  GOLURKITE,
+  MEOWSTICITE,
+  CRABOMINITE,
+  GOLISOPITE,
+  MAGEARNITE,
+  ZERAORITE,
+  SCOVILLAINITE,
+  GLIMMORANITE,
+  TATSUGIRINITE,
+  BAXCALIBRITE,
+
+  // #endregion Mega Stones
+
+  // #region Rare Form Change Items
+
+  BLUE_ORB = 100,
   RED_ORB,
   ADAMANT_CRYSTAL,
   LUSTROUS_GLOBE,
@@ -66,7 +119,11 @@ export enum FormChangeItem {
   SHADOW_REINS_OF_UNITY,
   ULTRANECROZIUM_Z,
 
-  SHARP_METEORITE = 100,
+  // #endregion Rare Form Change Items
+
+  // #region Form Change Items
+
+  SHARP_METEORITE = 150,
   HARD_METEORITE,
   SMOOTH_METEORITE,
   GRACIDEA,
@@ -96,8 +153,8 @@ export enum FormChangeItem {
   DRACO_PLATE,
   DREAD_PLATE,
   PIXIE_PLATE,
-  BLANK_PLATE,// TODO: Find a potential use for this
-  LEGEND_PLATE,// TODO: Find a potential use for this
+  BLANK_PLATE, // TODO: Find a potential use for this
+  LEGEND_PLATE, // TODO: Find a potential use for this
   FIGHTING_MEMORY,
   FLYING_MEMORY,
   POISON_MEMORY,
@@ -115,5 +172,7 @@ export enum FormChangeItem {
   DRAGON_MEMORY,
   DARK_MEMORY,
   FAIRY_MEMORY,
-  NORMAL_MEMORY
+  NORMAL_MEMORY,
+
+  // #endregion Form Change Items
 }

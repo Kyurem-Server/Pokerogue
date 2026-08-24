@@ -1,8 +1,8 @@
 import type { TrainerType } from "#enums/trainer-type";
-import Trainer from "../field/trainer";
 import { TrainerVariant } from "#enums/trainer-variant";
+import { Trainer } from "#field/trainer";
 
-export default class TrainerData {
+export class TrainerData {
   public trainerType: TrainerType;
   public variant: TrainerVariant;
   public partyTemplateIndex: number;
@@ -12,7 +12,7 @@ export default class TrainerData {
   constructor(source: Trainer | any) {
     const sourceTrainer = source instanceof Trainer ? (source as Trainer) : null;
     this.trainerType = sourceTrainer ? sourceTrainer.config.trainerType : source.trainerType;
-    this.variant = source.hasOwnProperty("variant")
+    this.variant = Object.hasOwn(source, "variant")
       ? source.variant
       : source.female
         ? TrainerVariant.FEMALE

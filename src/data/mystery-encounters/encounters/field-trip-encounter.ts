@@ -1,25 +1,25 @@
-import { MoveCategory } from "#enums/MoveCategory";
-import { MysteryEncounterOptionBuilder } from "#app/data/mystery-encounters/mystery-encounter-option";
+import { CLASSIC_MODE_MYSTERY_ENCOUNTER_WAVES } from "#app/constants";
+import { globalScene } from "#app/global-scene";
+import { modifierTypes } from "#data/data-lists";
+import { MoveCategory } from "#enums/move-category";
+import { MysteryEncounterOptionMode } from "#enums/mystery-encounter-option-mode";
+import { MysteryEncounterTier } from "#enums/mystery-encounter-tier";
+import { MysteryEncounterType } from "#enums/mystery-encounter-type";
+import { Stat } from "#enums/stat";
+import type { PlayerPokemon } from "#field/pokemon";
+import type { PokemonMove } from "#moves/pokemon-move";
 import {
   generateModifierTypeOption,
   leaveEncounterWithoutBattle,
   selectPokemonForOption,
   setEncounterExp,
   setEncounterRewards,
-} from "#app/data/mystery-encounters/utils/encounter-phase-utils";
-import type { PlayerPokemon } from "#app/field/pokemon";
-import type { PokemonMove } from "#app/data/moves/pokemon-move";
-import { modifierTypes } from "#app/data/data-lists";
-import type { OptionSelectItem } from "#app/ui/abstact-option-select-ui-handler";
-import { MysteryEncounterType } from "#enums/mystery-encounter-type";
-import { globalScene } from "#app/global-scene";
-import type MysteryEncounter from "#app/data/mystery-encounters/mystery-encounter";
-import { MysteryEncounterBuilder } from "#app/data/mystery-encounters/mystery-encounter";
-import { MysteryEncounterTier } from "#enums/mystery-encounter-tier";
-import { MysteryEncounterOptionMode } from "#enums/mystery-encounter-option-mode";
-import { Stat } from "#enums/stat";
+} from "#mystery-encounters/encounter-phase-utils";
+import type { MysteryEncounter } from "#mystery-encounters/mystery-encounter";
+import { MysteryEncounterBuilder } from "#mystery-encounters/mystery-encounter";
+import { MysteryEncounterOptionBuilder } from "#mystery-encounters/mystery-encounter-option";
+import type { OptionSelectItem } from "#types/ui-types";
 import i18next from "i18next";
-import { CLASSIC_MODE_MYSTERY_ENCOUNTER_WAVES } from "#app/constants";
 
 /** i18n namespace for the encounter */
 const namespace = "mysteryEncounters/fieldTrip";
@@ -56,7 +56,7 @@ export const FieldTripEncounter: MysteryEncounter = MysteryEncounterBuilder.with
       text: `${namespace}:intro`,
     },
     {
-      text: `${namespace}:intro_dialogue`,
+      text: `${namespace}:introDialogue`,
       speaker: `${namespace}:speaker`,
     },
   ])
@@ -70,7 +70,7 @@ export const FieldTripEncounter: MysteryEncounter = MysteryEncounterBuilder.with
       .withDialogue({
         buttonLabel: `${namespace}:option.1.label`,
         buttonTooltip: `${namespace}:option.1.tooltip`,
-        secondOptionPrompt: `${namespace}:second_option_prompt`,
+        secondOptionPrompt: `${namespace}:secondOptionPrompt`,
       })
       .withPreOptionPhase(async (): Promise<boolean> => {
         const encounter = globalScene.currentBattle.mysteryEncounter!;
@@ -118,7 +118,7 @@ export const FieldTripEncounter: MysteryEncounter = MysteryEncounterBuilder.with
       .withDialogue({
         buttonLabel: `${namespace}:option.2.label`,
         buttonTooltip: `${namespace}:option.2.tooltip`,
-        secondOptionPrompt: `${namespace}:second_option_prompt`,
+        secondOptionPrompt: `${namespace}:secondOptionPrompt`,
       })
       .withPreOptionPhase(async (): Promise<boolean> => {
         const encounter = globalScene.currentBattle.mysteryEncounter!;
@@ -166,7 +166,7 @@ export const FieldTripEncounter: MysteryEncounter = MysteryEncounterBuilder.with
       .withDialogue({
         buttonLabel: `${namespace}:option.3.label`,
         buttonTooltip: `${namespace}:option.3.tooltip`,
-        secondOptionPrompt: `${namespace}:second_option_prompt`,
+        secondOptionPrompt: `${namespace}:secondOptionPrompt`,
       })
       .withPreOptionPhase(async (): Promise<boolean> => {
         const encounter = globalScene.currentBattle.mysteryEncounter!;
@@ -216,24 +216,7 @@ function pokemonAndMoveChosen(pokemon: PlayerPokemon, move: PokemonMove, correct
   const correctMove = move.getMove().category === correctMoveCategory;
   encounter.setDialogueToken("pokeName", pokemon.getNameToRender());
   encounter.setDialogueToken("move", move.getName());
-  if (!correctMove) {
-    encounter.selectedOption!.dialogue!.selected = [
-      {
-        text: `${namespace}:option.selected`,
-      },
-      {
-        text: `${namespace}:incorrect`,
-        speaker: `${namespace}:speaker`,
-      },
-      {
-        text: `${namespace}:incorrect_exp`,
-      },
-    ];
-    setEncounterExp(
-      globalScene.getPlayerParty().map(p => p.id),
-      50,
-    );
-  } else {
+  if (correctMove) {
     encounter.selectedOption!.dialogue!.selected = [
       {
         text: `${namespace}:option.selected`,
@@ -243,12 +226,29 @@ function pokemonAndMoveChosen(pokemon: PlayerPokemon, move: PokemonMove, correct
         speaker: `${namespace}:speaker`,
       },
       {
-        text: `${namespace}:correct_exp`,
+        text: `${namespace}:correctExp`,
       },
     ];
     setEncounterExp([pokemon.id], 100);
+  } else {
+    encounter.selectedOption!.dialogue!.selected = [
+      {
+        text: `${namespace}:option.selected`,
+      },
+      {
+        text: `${namespace}:incorrect`,
+        speaker: `${namespace}:speaker`,
+      },
+      {
+        text: `${namespace}:incorrectExp`,
+      },
+    ];
+    setEncounterExp(
+      globalScene.getPlayerParty().map(p => p.id),
+      50,
+    );
   }
   encounter.misc = {
-    correctMove: correctMove,
+    correctMove,
   };
 }

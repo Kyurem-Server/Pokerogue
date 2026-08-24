@@ -1,35 +1,34 @@
+import { CLASSIC_MODE_MYSTERY_ENCOUNTER_WAVES } from "#app/constants";
+import { timedEventManager } from "#app/global-event-manager";
+import { globalScene } from "#app/global-scene";
+import { speciesDataRegistry } from "#app/global-species-data-registry";
+import { NON_LEGEND_PARADOX_POKEMON, NON_LEGEND_ULTRA_BEASTS } from "#balance/special-species-groups";
+import type { PokemonSpecies } from "#data/pokemon-species";
+import { AbilityId } from "#enums/ability-id";
+import { MysteryEncounterOptionMode } from "#enums/mystery-encounter-option-mode";
+import { MysteryEncounterTier } from "#enums/mystery-encounter-tier";
+import { MysteryEncounterType } from "#enums/mystery-encounter-type";
+import { PokeballType } from "#enums/pokeball";
+import { SpeciesId } from "#enums/species-id";
+import type { EnemyPokemon } from "#field/pokemon";
+import { PlayerPokemon } from "#field/pokemon";
+import { showEncounterDialogue } from "#mystery-encounters/encounter-dialogue-utils";
 import {
   leaveEncounterWithoutBattle,
   transitionMysteryEncounterIntroVisuals,
   updatePlayerMoney,
-} from "#app/data/mystery-encounters/utils/encounter-phase-utils";
-import { isNullOrUndefined, randSeedInt, randSeedItem } from "#app/utils/common";
-import { MysteryEncounterType } from "#enums/mystery-encounter-type";
-import { globalScene } from "#app/global-scene";
-import type MysteryEncounter from "#app/data/mystery-encounters/mystery-encounter";
-import { MysteryEncounterBuilder } from "#app/data/mystery-encounters/mystery-encounter";
-import { MoneyRequirement } from "#app/data/mystery-encounters/mystery-encounter-requirements";
+} from "#mystery-encounters/encounter-phase-utils";
 import {
   catchPokemon,
   getRandomSpeciesByStarterCost,
   getSpriteKeysFromPokemon,
-} from "#app/data/mystery-encounters/utils/encounter-pokemon-utils";
-import type PokemonSpecies from "#app/data/pokemon-species";
-import { getPokemonSpecies } from "#app/utils/pokemon-utils";
-import { speciesStarterCosts } from "#app/data/balance/starters";
-import { SpeciesId } from "#enums/species-id";
-import { PokeballType } from "#enums/pokeball";
-import type { EnemyPokemon } from "#app/field/pokemon";
-import { PlayerPokemon } from "#app/field/pokemon";
-import { MysteryEncounterOptionBuilder } from "#app/data/mystery-encounters/mystery-encounter-option";
-import { showEncounterDialogue } from "#app/data/mystery-encounters/utils/encounter-dialogue-utils";
-import PokemonData from "#app/system/pokemon-data";
-import { MysteryEncounterTier } from "#enums/mystery-encounter-tier";
-import { MysteryEncounterOptionMode } from "#enums/mystery-encounter-option-mode";
-import { CLASSIC_MODE_MYSTERY_ENCOUNTER_WAVES } from "#app/constants";
-import { AbilityId } from "#enums/ability-id";
-import { NON_LEGEND_PARADOX_POKEMON, NON_LEGEND_ULTRA_BEASTS } from "#app/data/balance/special-species-groups";
-import { timedEventManager } from "#app/global-event-manager";
+} from "#mystery-encounters/encounter-pokemon-utils";
+import type { MysteryEncounter } from "#mystery-encounters/mystery-encounter";
+import { MysteryEncounterBuilder } from "#mystery-encounters/mystery-encounter";
+import { MysteryEncounterOptionBuilder } from "#mystery-encounters/mystery-encounter-option";
+import { MoneyRequirement } from "#mystery-encounters/mystery-encounter-requirements";
+import { PokemonData } from "#system/pokemon-data";
+import { randSeedInt, randSeedItem } from "#utils/common";
 
 /** the i18n namespace for this encounter */
 const namespace = "mysteryEncounters/thePokemonSalesman";
@@ -66,7 +65,7 @@ export const ThePokemonSalesmanEncounter: MysteryEncounter = MysteryEncounterBui
       text: `${namespace}:intro`,
     },
     {
-      text: `${namespace}:intro_dialogue`,
+      text: `${namespace}:introDialogue`,
       speaker: `${namespace}:speaker`,
     },
   ])
@@ -77,54 +76,56 @@ export const ThePokemonSalesmanEncounter: MysteryEncounter = MysteryEncounterBui
   .withOnInit(() => {
     const encounter = globalScene.currentBattle.mysteryEncounter!;
 
+    let isEventEncounter = false;
+
     let species = getSalesmanSpeciesOffer();
     let tries = 0;
 
     // Reroll any species that don't have HAs
-    while ((isNullOrUndefined(species.abilityHidden) || species.abilityHidden === AbilityId.NONE) && tries < 5) {
+    while ((species.abilityHidden == null || species.abilityHidden === AbilityId.NONE) && tries < 5) {
       species = getSalesmanSpeciesOffer();
       tries++;
     }
 
     const r = randSeedInt(SHINY_MAGIKARP_WEIGHT);
 
-    const validEventEncounters = timedEventManager
-      .getEventEncounters()
-      .filter(
-        s =>
-          !getPokemonSpecies(s.species).legendary &&
-          !getPokemonSpecies(s.species).subLegendary &&
-          !getPokemonSpecies(s.species).mythical &&
-          !NON_LEGEND_PARADOX_POKEMON.includes(s.species) &&
-          !NON_LEGEND_ULTRA_BEASTS.includes(s.species),
-      );
+    const validEventEncounters = timedEventManager.getAllValidEventEncounters(
+      false,
+      false,
+      false,
+      s =>
+        !NON_LEGEND_PARADOX_POKEMON.includes(s.speciesId)
+        && !NON_LEGEND_ULTRA_BEASTS.includes(s.speciesId)
+        && speciesDataRegistry.isStarter(s.speciesId), // The event expects the chosen pokemon to be a valid starter, and will break if a non-starter is chosen
+    );
 
     let pokemon: PlayerPokemon;
-    /**
+    /*
      * Mon is determined as follows:
-     * If you roll the 1% for Shiny Magikarp, you get Magikarp with a random variant
-     * If an event with more than 1 valid event encounter species is active, you have 20% chance to get one of those
-     * If the rolled species has no HA, and there are valid event encounters, you will get one of those
-     * If the rolled species has no HA and there are no valid event encounters, you will get Shiny Magikarp
+     * - If you roll the 1% for Shiny Magikarp, you get Magikarp with a random variant
+     * - If an event with more than 1 valid event encounter species is active, you have 20% chance to get one of those
+     * - If the rolled species has no HA, and there are valid event encounters, you will get one of those
+     * - If the rolled species has no HA and there are no valid event encounters, you will get Shiny Magikarp
+     *
      * Mons rolled from the event encounter pool get 3 extra shiny rolls
      */
     if (
-      r === 0 ||
-      ((isNullOrUndefined(species.abilityHidden) || species.abilityHidden === AbilityId.NONE) &&
-        validEventEncounters.length === 0)
+      r === 0
+      || ((species.abilityHidden == null || species.abilityHidden === AbilityId.NONE)
+        && validEventEncounters.length === 0)
     ) {
       // If you roll 1%, give shiny Magikarp with random variant
-      species = getPokemonSpecies(SpeciesId.MAGIKARP);
+      species = speciesDataRegistry.getSpecies(SpeciesId.MAGIKARP);
       pokemon = new PlayerPokemon(species, 5, 2, undefined, undefined, true);
     } else if (
-      validEventEncounters.length > 0 &&
-      (r <= EVENT_THRESHOLD || isNullOrUndefined(species.abilityHidden) || species.abilityHidden === AbilityId.NONE)
+      validEventEncounters.length > 0
+      && (r <= EVENT_THRESHOLD || species.abilityHidden == null || species.abilityHidden === AbilityId.NONE)
     ) {
       tries = 0;
       do {
-        // If you roll 20%, give event encounter with 3 extra shiny rolls and its HA, if it has one
+        // If you roll 50%, give event encounter with 3 extra shiny rolls and its HA, if it has one
         const enc = randSeedItem(validEventEncounters);
-        species = getPokemonSpecies(enc.species);
+        species = speciesDataRegistry.getSpecies(enc.species);
         pokemon = new PlayerPokemon(
           species,
           5,
@@ -135,23 +136,25 @@ export const ThePokemonSalesmanEncounter: MysteryEncounter = MysteryEncounterBui
         pokemon.trySetShinySeed();
         pokemon.trySetShinySeed();
         if (pokemon.shiny || pokemon.abilityIndex === 2) {
+          isEventEncounter = true;
           break;
         }
         tries++;
       } while (tries < 6);
       if (!pokemon.shiny && pokemon.abilityIndex !== 2) {
         // If, after 6 tries, you STILL somehow don't have an HA or shiny mon, pick from only the event mons that have an HA.
-        if (validEventEncounters.some(s => !!getPokemonSpecies(s.species).abilityHidden)) {
-          validEventEncounters.filter(s => !!getPokemonSpecies(s.species).abilityHidden);
+        if (validEventEncounters.some(s => !!speciesDataRegistry.getSpecies(s.species).abilityHidden)) {
+          validEventEncounters.filter(s => !!speciesDataRegistry.getSpecies(s.species).abilityHidden);
           const enc = randSeedItem(validEventEncounters);
-          species = getPokemonSpecies(enc.species);
+          species = speciesDataRegistry.getSpecies(enc.species);
           pokemon = new PlayerPokemon(species, 5, 2, enc.formIndex);
           pokemon.trySetShinySeed();
           pokemon.trySetShinySeed();
           pokemon.trySetShinySeed();
+          isEventEncounter = true;
         } else {
           // If there's, and this would never happen, no eligible event encounters with a hidden ability, just do Magikarp
-          species = getPokemonSpecies(SpeciesId.MAGIKARP);
+          species = speciesDataRegistry.getSpecies(SpeciesId.MAGIKARP);
           pokemon = new PlayerPokemon(species, 5, 2, undefined, undefined, true);
         }
       }
@@ -162,8 +165,8 @@ export const ThePokemonSalesmanEncounter: MysteryEncounter = MysteryEncounterBui
 
     const { spriteKey, fileRoot } = getSpriteKeysFromPokemon(pokemon);
     encounter.spriteConfigs.push({
-      spriteKey: spriteKey,
-      fileRoot: fileRoot,
+      spriteKey,
+      fileRoot,
       hasShadow: true,
       repeat: true,
       isPokemon: true,
@@ -171,22 +174,24 @@ export const ThePokemonSalesmanEncounter: MysteryEncounter = MysteryEncounterBui
       variant: pokemon.variant,
     });
 
-    const starterTier = speciesStarterCosts[species.speciesId];
+    const starterTier = speciesDataRegistry.getStarterCost(species.speciesId);
     // Prices decrease by starter tier less than 5, but only reduces cost by half at max
     let priceMultiplier = MAX_POKEMON_PRICE_MULTIPLIER * (Math.max(starterTier, 2.5) / 5);
     if (pokemon.shiny) {
       // Always max price for shiny (flip HA back to normal), and add special messaging
       priceMultiplier = MAX_POKEMON_PRICE_MULTIPLIER;
-      pokemon.abilityIndex = 0;
-      encounter.dialogue.encounterOptionsDialogue!.description = `${namespace}:description_shiny`;
-      encounter.options[0].dialogue!.buttonTooltip = `${namespace}:option.1.tooltip_shiny`;
+      if (!isEventEncounter) {
+        pokemon.abilityIndex = 0;
+      }
+      encounter.dialogue.encounterOptionsDialogue!.description = `${namespace}:descriptionShiny`;
+      encounter.options[0].dialogue!.buttonTooltip = `${namespace}:option.1.tooltipShiny`;
     }
     const price = globalScene.getWaveMoneyAmount(priceMultiplier);
     encounter.setDialogueToken("purchasePokemon", pokemon.getNameToRender());
     encounter.setDialogueToken("price", price.toString());
     encounter.misc = {
-      price: price,
-      pokemon: pokemon,
+      price,
+      pokemon,
     };
 
     pokemon.calculateStats();
@@ -202,7 +207,7 @@ export const ThePokemonSalesmanEncounter: MysteryEncounter = MysteryEncounterBui
         buttonTooltip: `${namespace}:option.1.tooltip`,
         selected: [
           {
-            text: `${namespace}:option.1.selected_message`,
+            text: `${namespace}:option.1.selectedMessage`,
           },
         ],
       })
@@ -215,7 +220,7 @@ export const ThePokemonSalesmanEncounter: MysteryEncounter = MysteryEncounterBui
         updatePlayerMoney(-price, true, false);
 
         // Show dialogue
-        await showEncounterDialogue(`${namespace}:option.1.selected_dialogue`, `${namespace}:speaker`);
+        await showEncounterDialogue(`${namespace}:option.1.selectedDialogue`, `${namespace}:speaker`);
         await transitionMysteryEncounterIntroVisuals();
 
         // "Catch" purchased pokemon
@@ -249,7 +254,7 @@ export const ThePokemonSalesmanEncounter: MysteryEncounter = MysteryEncounterBui
  * @returns A random species that has at most 5 starter cost and is not Mythical, Paradox, etc.
  */
 export function getSalesmanSpeciesOffer(): PokemonSpecies {
-  return getPokemonSpecies(
+  return speciesDataRegistry.getSpecies(
     getRandomSpeciesByStarterCost([0, 5], NON_LEGEND_PARADOX_POKEMON, undefined, false, false, false),
   );
 }

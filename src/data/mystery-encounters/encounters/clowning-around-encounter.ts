@@ -1,4 +1,33 @@
-import type { EnemyPartyConfig } from "#app/data/mystery-encounters/utils/encounter-phase-utils";
+import { CLASSIC_MODE_MYSTERY_ENCOUNTER_WAVES } from "#app/constants";
+import { globalScene } from "#app/global-scene";
+import { speciesDataRegistry } from "#app/global-species-data-registry";
+import { EncounterBattleAnim } from "#data/battle-anims";
+import { allAbilities, modifierTypes } from "#data/data-lists";
+import { CustomPokemonData } from "#data/pokemon-data";
+import { AbilityId } from "#enums/ability-id";
+import { BattlerIndex } from "#enums/battler-index";
+import { BerryType } from "#enums/berry-type";
+import { Challenges } from "#enums/challenges";
+import { EncounterAnim } from "#enums/encounter-anims";
+import { ModifierPoolType } from "#enums/modifier-pool-type";
+import { ModifierTier } from "#enums/modifier-tier";
+import { MoveCategory } from "#enums/move-category";
+import { MoveId } from "#enums/move-id";
+import { MoveUseMode } from "#enums/move-use-mode";
+import { MysteryEncounterOptionMode } from "#enums/mystery-encounter-option-mode";
+import { MysteryEncounterTier } from "#enums/mystery-encounter-tier";
+import { MysteryEncounterType } from "#enums/mystery-encounter-type";
+import { PartyMemberStrength } from "#enums/party-member-strength";
+import type { RegularPokemonType } from "#enums/pokemon-type";
+import { SpeciesId } from "#enums/species-id";
+import { TrainerType } from "#enums/trainer-type";
+import { UiMode } from "#enums/ui-mode";
+import type { PlayerPokemon } from "#field/pokemon";
+import { BerryModifier } from "#modifiers/modifier";
+import type { PokemonHeldItemModifierType } from "#modifiers/modifier-type";
+import { PokemonMove } from "#moves/pokemon-move";
+import { showEncounterDialogue, showEncounterText } from "#mystery-encounters/encounter-dialogue-utils";
+import type { EnemyPartyConfig } from "#mystery-encounters/encounter-phase-utils";
 import {
   generateModifierType,
   initBattleWithEnemyConfig,
@@ -7,49 +36,20 @@ import {
   selectPokemonForOption,
   setEncounterRewards,
   transitionMysteryEncounterIntroVisuals,
-} from "#app/data/mystery-encounters/utils/encounter-phase-utils";
-import { trainerConfigs } from "#app/data/trainers/trainer-config";
-import { TrainerPartyCompoundTemplate } from "#app/data/trainers/TrainerPartyTemplate";
-import { TrainerPartyTemplate } from "#app/data/trainers/TrainerPartyTemplate";
-import { ModifierTier } from "#enums/modifier-tier";
-import type { PokemonHeldItemModifierType } from "#app/modifier/modifier-type";
-import { ModifierPoolType } from "#enums/modifier-pool-type";
-import { MysteryEncounterType } from "#enums/mystery-encounter-type";
-import { PartyMemberStrength } from "#enums/party-member-strength";
-import { globalScene } from "#app/global-scene";
-import type MysteryEncounter from "#app/data/mystery-encounters/mystery-encounter";
-import { MysteryEncounterBuilder } from "#app/data/mystery-encounters/mystery-encounter";
-import { MysteryEncounterTier } from "#enums/mystery-encounter-tier";
-import { SpeciesId } from "#enums/species-id";
-import { TrainerType } from "#enums/trainer-type";
-import { getPokemonSpecies } from "#app/utils/pokemon-utils";
-import { AbilityId } from "#enums/ability-id";
+} from "#mystery-encounters/encounter-phase-utils";
 import {
   applyAbilityOverrideToPokemon,
   applyModifierTypeToPlayerPokemon,
-} from "#app/data/mystery-encounters/utils/encounter-pokemon-utils";
-import { PokemonType } from "#enums/pokemon-type";
-import { MysteryEncounterOptionBuilder } from "#app/data/mystery-encounters/mystery-encounter-option";
-import { MysteryEncounterOptionMode } from "#enums/mystery-encounter-option-mode";
-import { randSeedInt, randSeedShuffle } from "#app/utils/common";
-import { showEncounterDialogue, showEncounterText } from "#app/data/mystery-encounters/utils/encounter-dialogue-utils";
-import { UiMode } from "#enums/ui-mode";
+} from "#mystery-encounters/encounter-pokemon-utils";
+import type { MysteryEncounter } from "#mystery-encounters/mystery-encounter";
+import { MysteryEncounterBuilder } from "#mystery-encounters/mystery-encounter";
+import { MysteryEncounterOptionBuilder } from "#mystery-encounters/mystery-encounter-option";
+import { trainerConfigs } from "#trainers/trainer-config";
+import { TrainerPartyCompoundTemplate, TrainerPartyTemplate } from "#trainers/trainer-party-template";
+import type { OptionSelectConfig } from "#types/ui-types";
+import { randSeedInt, randSeedShuffle } from "#utils/common";
+import { getRandomRegularPokemonType } from "#utils/pokemon-utils";
 import i18next from "i18next";
-import type { OptionSelectConfig } from "#app/ui/abstact-option-select-ui-handler";
-import type { PlayerPokemon } from "#app/field/pokemon";
-import { PokemonMove } from "#app/data/moves/pokemon-move";
-import { BerryModifier } from "#app/modifier/modifier";
-import { BerryType } from "#enums/berry-type";
-import { BattlerIndex } from "#enums/battler-index";
-import { MoveId } from "#enums/move-id";
-import { EncounterBattleAnim } from "#app/data/battle-anims";
-import { MoveCategory } from "#enums/MoveCategory";
-import { CustomPokemonData } from "#app/data/pokemon/pokemon-data";
-import { CLASSIC_MODE_MYSTERY_ENCOUNTER_WAVES } from "#app/constants";
-import { EncounterAnim } from "#enums/encounter-anims";
-import { Challenges } from "#enums/challenges";
-import { MoveUseMode } from "#enums/move-use-mode";
-import { allAbilities, modifierTypes } from "#app/data/data-lists";
 
 /** the i18n namespace for the encounter */
 const namespace = "mysteryEncounters/clowningAround";
@@ -87,8 +87,9 @@ export const ClowningAroundEncounter: MysteryEncounter = MysteryEncounterBuilder
   .withAutoHideIntroVisuals(false)
   .withIntroSpriteConfigs([
     {
-      spriteKey: SpeciesId.MR_MIME.toString(),
-      fileRoot: "pokemon",
+      species: SpeciesId.MR_MIME,
+      spriteKey: "",
+      fileRoot: "",
       hasShadow: true,
       repeat: true,
       x: -25,
@@ -97,8 +98,9 @@ export const ClowningAroundEncounter: MysteryEncounter = MysteryEncounterBuilder
       yShadow: -3,
     },
     {
-      spriteKey: SpeciesId.BLACEPHALON.toString(),
-      fileRoot: "pokemon/exp",
+      species: SpeciesId.BLACEPHALON,
+      spriteKey: "",
+      fileRoot: "",
       hasShadow: true,
       repeat: true,
       x: 25,
@@ -120,7 +122,7 @@ export const ClowningAroundEncounter: MysteryEncounter = MysteryEncounterBuilder
       text: `${namespace}:intro`,
     },
     {
-      text: `${namespace}:intro_dialogue`,
+      text: `${namespace}:introDialogue`,
       speaker: `${namespace}:speaker`,
     },
   ])
@@ -139,6 +141,7 @@ export const ClowningAroundEncounter: MysteryEncounter = MysteryEncounterBuilder
     clownConfig.partyTemplateFunc = null; // Overrides party template func if it exists
 
     // Generate random ability for Blacephalon from pool
+    // TODO: should this use `randSeedItem`?
     const ability = RANDOM_ABILITY_POOL[randSeedInt(RANDOM_ABILITY_POOL.length)];
     encounter.setDialogueToken("ability", allAbilities[ability].name);
     encounter.misc = { ability };
@@ -155,15 +158,15 @@ export const ClowningAroundEncounter: MysteryEncounter = MysteryEncounterBuilder
       pokemonConfigs: [
         // Overrides first 2 pokemon to be Mr. Mime and Blacephalon
         {
-          species: getPokemonSpecies(SpeciesId.MR_MIME),
+          species: speciesDataRegistry.getSpecies(SpeciesId.MR_MIME),
           isBoss: true,
           moveSet: [MoveId.TEETER_DANCE, MoveId.ALLY_SWITCH, MoveId.DAZZLING_GLEAM, MoveId.PSYCHIC],
         },
         {
           // Blacephalon has the random ability from pool, and 2 entirely random types to fit with the theme of the encounter
-          species: getPokemonSpecies(SpeciesId.BLACEPHALON),
+          species: speciesDataRegistry.getSpecies(SpeciesId.BLACEPHALON),
           customPokemonData: new CustomPokemonData({
-            ability: ability,
+            ability,
             types: [firstType, secondType],
           }),
           isBoss: true,
@@ -176,7 +179,7 @@ export const ClowningAroundEncounter: MysteryEncounter = MysteryEncounterBuilder
     // Load animations/sfx for start of fight moves
     loadCustomMovesForEncounter([MoveId.ROLE_PLAY, MoveId.TAUNT]);
 
-    encounter.setDialogueToken("blacephalonName", getPokemonSpecies(SpeciesId.BLACEPHALON).getName());
+    encounter.setDialogueToken("blacephalonName", speciesDataRegistry.getSpecies(SpeciesId.BLACEPHALON).getName());
 
     return true;
   })
@@ -233,7 +236,7 @@ export const ClowningAroundEncounter: MysteryEncounter = MysteryEncounterBuilder
         // After the battle, offer the player the opportunity to permanently swap ability
         const abilityWasSwapped = await handleSwapAbility();
         if (abilityWasSwapped) {
-          await showEncounterText(`${namespace}:option.1.ability_gained`);
+          await showEncounterText(`${namespace}:option.1.abilityGained`);
         }
 
         // Play animations once ability swap is complete
@@ -267,10 +270,10 @@ export const ClowningAroundEncounter: MysteryEncounter = MysteryEncounterBuilder
             speaker: `${namespace}:speaker`,
           },
           {
-            text: `${namespace}:option.2.selected_2`,
+            text: `${namespace}:option.2.selected2`,
           },
           {
-            text: `${namespace}:option.2.selected_3`,
+            text: `${namespace}:option.2.selected3`,
             speaker: `${namespace}:speaker`,
           },
         ],
@@ -359,10 +362,10 @@ export const ClowningAroundEncounter: MysteryEncounter = MysteryEncounterBuilder
             speaker: `${namespace}:speaker`,
           },
           {
-            text: `${namespace}:option.3.selected_2`,
+            text: `${namespace}:option.3.selected2`,
           },
           {
-            text: `${namespace}:option.3.selected_3`,
+            text: `${namespace}:option.3.selected3`,
             speaker: `${namespace}:speaker`,
           },
         ],
@@ -371,28 +374,31 @@ export const ClowningAroundEncounter: MysteryEncounter = MysteryEncounterBuilder
         // Randomize the second type of all player's pokemon
         // If the pokemon does not normally have a second type, it will gain 1
         for (const pokemon of globalScene.getPlayerParty()) {
-          const originalTypes = pokemon.getTypes(false, false, true);
+          const originalTypes = pokemon.getTypes({
+            includeTeraType: false,
+            bypassSummonData: true,
+            ignoreThirdType: true,
+          });
 
           // If the Pokemon has non-status moves that don't match the Pokemon's type, prioritizes those as the new type
           // Makes the "randomness" of the shuffle slightly less punishing
           let priorityTypes = pokemon.moveset
             .filter(
-              move =>
-                move && !originalTypes.includes(move.getMove().type) && move.getMove().category !== MoveCategory.STATUS,
+              move => !originalTypes.includes(move.getMove().type) && move.getMove().category !== MoveCategory.STATUS,
             )
-            .map(move => move!.getMove().type);
+            .map(move => move.getMove().type) as RegularPokemonType[];
           if (priorityTypes?.length > 0) {
             priorityTypes = [...new Set(priorityTypes)].sort();
             priorityTypes = randSeedShuffle(priorityTypes);
           }
 
-          const newTypes = [PokemonType.UNKNOWN];
-          let secondType: PokemonType | null = null;
-          while (secondType === null || secondType === newTypes[0] || originalTypes.includes(secondType)) {
+          const newTypes: (RegularPokemonType | null)[] = [null];
+          let secondType: RegularPokemonType | undefined;
+          while (secondType == null || originalTypes.includes(secondType)) {
             if (priorityTypes.length > 0) {
-              secondType = priorityTypes.pop() ?? null;
+              secondType = priorityTypes.pop();
             } else {
-              secondType = randSeedInt(18) as PokemonType;
+              secondType = getRandomRegularPokemonType();
             }
           }
           newTypes.push(secondType);
@@ -432,8 +438,8 @@ export const ClowningAroundEncounter: MysteryEncounter = MysteryEncounterBuilder
 async function handleSwapAbility() {
   // biome-ignore lint/suspicious/noAsyncPromiseExecutor: TODO: Consider refactoring to avoid async promise executor
   return new Promise<boolean>(async resolve => {
-    await showEncounterDialogue(`${namespace}:option.1.apply_ability_dialogue`, `${namespace}:speaker`);
-    await showEncounterText(`${namespace}:option.1.apply_ability_message`);
+    await showEncounterDialogue(`${namespace}:option.1.applyAbilityDialogue`, `${namespace}:speaker`);
+    await showEncounterText(`${namespace}:option.1.applyAbilityMessage`);
 
     globalScene.ui.setMode(UiMode.MESSAGE).then(() => {
       displayYesNoOptions(resolve);
@@ -442,7 +448,7 @@ async function handleSwapAbility() {
 }
 
 function displayYesNoOptions(resolve) {
-  showEncounterText(`${namespace}:option.1.ability_prompt`, null, 500, false);
+  showEncounterText(`${namespace}:option.1.abilityPrompt`, null, 500, false);
   const fullOptions = [
     {
       label: i18next.t("menu:yes"),

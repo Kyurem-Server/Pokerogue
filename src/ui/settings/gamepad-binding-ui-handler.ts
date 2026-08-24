@@ -1,12 +1,13 @@
-import AbstractBindingUiHandler from "./abstract-binding-ui-handler";
-import type { UiMode } from "#enums/ui-mode";
-import { Device } from "#enums/devices";
-import { getIconWithSettingName, getKeyWithKeycode } from "#app/configs/inputs/configHandler";
-import { addTextObject, TextStyle } from "#app/ui/text";
 import { globalScene } from "#app/global-scene";
+import { Device } from "#enums/devices";
+import { TextStyle } from "#enums/text-style";
+import type { UiMode } from "#enums/ui-mode";
+import { getIconWithSettingName, getKeyWithKeycode } from "#inputs/config-handler";
+import { BaseBindingUiHandler } from "#ui/base-binding-ui-handler";
+import { addTextObject } from "#ui/text";
 import i18next from "i18next";
 
-export default class GamepadBindingUiHandler extends AbstractBindingUiHandler {
+export class GamepadBindingUiHandler extends BaseBindingUiHandler {
   constructor(mode: UiMode | null = null) {
     super(mode);
     globalScene.input.gamepad?.on("down", this.gamepadButtonDown, this);
@@ -44,7 +45,7 @@ export default class GamepadBindingUiHandler extends AbstractBindingUiHandler {
     this.optionSelectContainer.add(this.targetButtonIcon);
   }
 
-  getSelectedDevice() {
+  getSelectedDevice(): string | undefined {
     return globalScene.inputController?.selectedDevice[Device.GAMEPAD];
   }
 
@@ -52,29 +53,37 @@ export default class GamepadBindingUiHandler extends AbstractBindingUiHandler {
     const blacklist = [12, 13, 14, 15]; // d-pad buttons are blacklisted.
     // Check conditions before processing the button press.
     if (
-      !this.listening ||
-      pad.id.toLowerCase() !== this.getSelectedDevice() ||
-      blacklist.includes(button.index) ||
-      this.buttonPressed !== null
+      !this.listening
+      || pad.id.toLowerCase() !== this.getSelectedDevice()
+      || blacklist.includes(button.index)
+      || this.buttonPressed !== null
     ) {
       return;
     }
-    const activeConfig = globalScene.inputController.getActiveConfig(Device.GAMEPAD);
+    // Active config must be defined if there was a gamepad button down event.
+    const activeConfig = globalScene.inputController.getActiveConfig(Device.GAMEPAD)!;
     const type = activeConfig.padType;
-    const key = getKeyWithKeycode(activeConfig, button.index);
+    const key = getKeyWithKeycode(activeConfig, button.index) as keyof typeof activeConfig.icons;
     const buttonIcon = activeConfig.icons[key];
     if (!buttonIcon) {
       return;
     }
     this.buttonPressed = button.index;
     const assignedButtonIcon = getIconWithSettingName(activeConfig, this.target);
-    this.onInputDown(buttonIcon, assignedButtonIcon, type);
+    // Bang is safe, we already check for buttonIcon above.
+    this.onInputDown(buttonIcon, assignedButtonIcon!, type);
   }
 
   swapAction(): boolean {
     const activeConfig = globalScene.inputController.getActiveConfig(Device.GAMEPAD);
-    if (globalScene.inputController.assignBinding(activeConfig, this.target, this.buttonPressed)) {
-      globalScene.gameData.saveMappingConfigs(this.getSelectedDevice(), activeConfig);
+    const selectedDevice = this.getSelectedDevice();
+    if (
+      activeConfig != null
+      && this.buttonPressed != null
+      && selectedDevice != null
+      && globalScene.inputController.assignBinding(activeConfig, this.target, this.buttonPressed)
+    ) {
+      globalScene.gameData.saveMappingConfigs(selectedDevice, activeConfig);
       return true;
     }
     return false;

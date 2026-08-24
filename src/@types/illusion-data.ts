@@ -1,27 +1,21 @@
-import type { Gender } from "#app/data/gender";
-import type PokemonSpecies from "#app/data/pokemon-species";
-import type { Variant } from "#app/sprites/variant";
+import type { Gender } from "#data/gender";
+import type { PokemonSpecies } from "#data/pokemon-species";
 import type { PokeballType } from "#enums/pokeball";
 import type { SpeciesId } from "#enums/species-id";
+import type { Variant } from "#sprites/variant";
 
 /**
  * Data pertaining to a Pokemon's Illusion.
  */
 export interface IllusionData {
-  basePokemon: {
-    /** The actual name of the Pokemon */
-    name: string;
-    /** The actual nickname of the Pokemon */
-    nickname: string;
-    /** Whether the base pokemon is shiny or not */
-    shiny: boolean;
-    /** The shiny variant of the base pokemon */
-    variant: Variant;
-    /** Whether the fusion species of the base pokemon is shiny or not */
-    fusionShiny: boolean;
-    /** The variant of the fusion species of the base pokemon */
-    fusionVariant: Variant;
-  };
+  /** The name of pokemon featured in the illusion */
+  name: string;
+  /** The nickname of the pokemon featured in the illusion */
+  nickname?: string | undefined;
+  /** Whether the pokemon featured in the illusion is shiny or not */
+  shiny: boolean;
+  /** The variant of the pokemon featured in the illusion */
+  variant: Variant;
   /** The species of the illusion */
   species: SpeciesId;
   /** The formIndex of the illusion */
@@ -31,11 +25,15 @@ export interface IllusionData {
   /** The pokeball of the illusion */
   pokeball: PokeballType;
   /** The fusion species of the illusion if it's a fusion */
-  fusionSpecies?: PokemonSpecies;
+  fusionSpecies?: PokemonSpecies | undefined;
   /** The fusionFormIndex of the illusion */
-  fusionFormIndex?: number;
+  fusionFormIndex?: number | undefined;
+  /** Whether the fusion species of the pokemon featured in the illusion is shiny or not */
+  fusionShiny?: boolean | undefined;
+  /** The variant of the fusion species of the pokemon featured in the illusion */
+  fusionVariant?: Variant | undefined;
   /** The fusionGender of the illusion if it's a fusion */
-  fusionGender?: Gender;
+  fusionGender?: Gender | undefined;
   /** The level of the illusion (not used currently) */
-  level?: number;
+  level?: number | undefined;
 }

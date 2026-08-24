@@ -1,10 +1,10 @@
+import { EGG_SEED, Egg } from "#data/egg";
+import type { EggSourceType } from "#enums/egg-source-types";
 import type { EggTier } from "#enums/egg-type";
 import type { SpeciesId } from "#enums/species-id";
 import type { VariantTier } from "#enums/variant-tier";
-import { EGG_SEED, Egg } from "../data/egg";
-import type { EggSourceType } from "#app/enums/egg-source-types";
 
-export default class EggData {
+export class EggData {
   public id: number;
   public tier: EggTier;
   public sourceType: EggSourceType;
@@ -19,6 +19,7 @@ export default class EggData {
   constructor(source: Egg | any) {
     const sourceEgg = source instanceof Egg ? (source as Egg) : null;
     this.id = sourceEgg ? sourceEgg.id : source.id;
+    // TODO: If `id` is `undefined`, the tier will become `NaN`
     this.tier = sourceEgg ? sourceEgg.tier : (source.tier ?? Math.floor(this.id / EGG_SEED));
     // legacy egg
     if (source.species === 0) {

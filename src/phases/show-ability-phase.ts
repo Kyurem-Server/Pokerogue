@@ -1,7 +1,7 @@
 import { globalScene } from "#app/global-scene";
-import type { BattlerIndex } from "#enums/battler-index";
-import { PokemonPhase } from "./pokemon-phase";
 import { getPokemonNameWithAffix } from "#app/messages";
+import type { BattlerIndex } from "#enums/battler-index";
+import { PokemonPhase } from "#phases/pokemon-phase";
 
 export class ShowAbilityPhase extends PokemonPhase {
   public readonly phaseName = "ShowAbilityPhase";
@@ -42,15 +42,15 @@ export class ShowAbilityPhase extends PokemonPhase {
 
     const pokemon = this.getPokemon();
 
-    if (!pokemon.isPlayer()) {
+    if (pokemon.isPlayer()) {
+      globalScene.currentBattle.lastPlayerInvolved = pokemon.getBattlerIndex() % 2;
+    } else {
       /** If its an enemy pokemon, list it as last enemy to use ability or move */
       globalScene.currentBattle.lastEnemyInvolved = pokemon.getBattlerIndex() % 2;
-    } else {
-      globalScene.currentBattle.lastPlayerInvolved = pokemon.getBattlerIndex() % 2;
     }
 
     globalScene.abilityBar.showAbility(this.pokemonName, this.abilityName, this.passive, this.player).then(() => {
-      pokemon.waveData.abilityRevealed = true;
+      pokemon.revealAbility();
 
       this.end();
     });

@@ -1,4 +1,26 @@
-import type { EnemyPartyConfig } from "#app/data/mystery-encounters/utils/encounter-phase-utils";
+import { applyAbAttrs } from "#abilities/apply-ab-attrs";
+import { CLASSIC_MODE_MYSTERY_ENCOUNTER_WAVES } from "#app/constants";
+import { audioManager } from "#app/global-audio-manager";
+import { globalScene } from "#app/global-scene";
+import { speciesDataRegistry } from "#app/global-species-data-registry";
+import { modifierTypes } from "#data/data-lists";
+import { SpeciesFormChangeAbilityTrigger } from "#data/form-change-triggers";
+import { AbilityId } from "#enums/ability-id";
+import { BattlerTagType } from "#enums/battler-tag-type";
+import { BerryType } from "#enums/berry-type";
+import { ModifierTier } from "#enums/modifier-tier";
+import { MoveId } from "#enums/move-id";
+import { MysteryEncounterMode } from "#enums/mystery-encounter-mode";
+import { MysteryEncounterTier } from "#enums/mystery-encounter-tier";
+import { MysteryEncounterType } from "#enums/mystery-encounter-type";
+import { Nature } from "#enums/nature";
+import { PokemonType } from "#enums/pokemon-type";
+import { SpeciesId } from "#enums/species-id";
+import { Stat } from "#enums/stat";
+import { TrainerType } from "#enums/trainer-type";
+import type { PokemonHeldItemModifierType } from "#modifiers/modifier-type";
+import { showEncounterDialogue, showEncounterText } from "#mystery-encounters/encounter-dialogue-utils";
+import type { EnemyPartyConfig } from "#mystery-encounters/encounter-phase-utils";
 import {
   generateModifierType,
   generateModifierTypeOption,
@@ -6,31 +28,10 @@ import {
   leaveEncounterWithoutBattle,
   setEncounterRewards,
   transitionMysteryEncounterIntroVisuals,
-} from "#app/data/mystery-encounters/utils/encounter-phase-utils";
-import type { PokemonHeldItemModifierType } from "#app/modifier/modifier-type";
-import { modifierTypes } from "#app/data/data-lists";
-import { MysteryEncounterType } from "#enums/mystery-encounter-type";
-import { globalScene } from "#app/global-scene";
-import type MysteryEncounter from "#app/data/mystery-encounters/mystery-encounter";
-import { MysteryEncounterBuilder } from "#app/data/mystery-encounters/mystery-encounter";
-import { MysteryEncounterTier } from "#enums/mystery-encounter-tier";
-import { TrainerType } from "#enums/trainer-type";
-import { SpeciesId } from "#enums/species-id";
-import { AbilityId } from "#enums/ability-id";
-import { getPokemonSpecies } from "#app/utils/pokemon-utils";
-import { MoveId } from "#enums/move-id";
-import { Nature } from "#enums/nature";
-import { PokemonType } from "#enums/pokemon-type";
-import { BerryType } from "#enums/berry-type";
-import { Stat } from "#enums/stat";
-import { SpeciesFormChangeAbilityTrigger } from "#app/data/pokemon-forms/form-change-triggers";
-import { applyAbAttrs } from "#app/data/abilities/apply-ab-attrs";
-import { showEncounterDialogue, showEncounterText } from "#app/data/mystery-encounters/utils/encounter-dialogue-utils";
-import { MysteryEncounterMode } from "#enums/mystery-encounter-mode";
+} from "#mystery-encounters/encounter-phase-utils";
+import type { MysteryEncounter } from "#mystery-encounters/mystery-encounter";
+import { MysteryEncounterBuilder } from "#mystery-encounters/mystery-encounter";
 import i18next from "i18next";
-import { ModifierTier } from "#enums/modifier-tier";
-import { CLASSIC_MODE_MYSTERY_ENCOUNTER_WAVES } from "#app/constants";
-import { BattlerTagType } from "#enums/battler-tag-type";
 
 /** the i18n namespace for the encounter */
 const namespace = "mysteryEncounters/theWinstrateChallenge";
@@ -45,6 +46,8 @@ export const TheWinstrateChallengeEncounter: MysteryEncounter = MysteryEncounter
 )
   .withEncounterTier(MysteryEncounterTier.ROGUE)
   .withSceneWaveRangeRequirement(100, CLASSIC_MODE_MYSTERY_ENCOUNTER_WAVES[1])
+  .withScenePartySizeRequirement(3)
+  .withMaxAllowedEncounters(1)
   .withIntroSpriteConfigs([
     {
       spriteKey: "vito",
@@ -87,7 +90,7 @@ export const TheWinstrateChallengeEncounter: MysteryEncounter = MysteryEncounter
     },
     {
       speaker: `${namespace}:speaker`,
-      text: `${namespace}:intro_dialogue`,
+      text: `${namespace}:introDialogue`,
     },
   ])
   .withAutoHideIntroVisuals(false)
@@ -153,17 +156,19 @@ export const TheWinstrateChallengeEncounter: MysteryEncounter = MysteryEncounter
 async function spawnNextTrainerOrEndEncounter() {
   const encounter = globalScene.currentBattle.mysteryEncounter!;
   const nextConfig = encounter.enemyPartyConfigs.pop();
-  if (!nextConfig) {
+  if (nextConfig) {
+    await initBattleWithEnemyConfig(nextConfig);
+  } else {
     await transitionMysteryEncounterIntroVisuals(false, false);
     await showEncounterDialogue(`${namespace}:victory`, `${namespace}:speaker`);
 
     // Give 10x Voucher
     const newModifier = modifierTypes.VOUCHER_PREMIUM().newModifier();
     globalScene.addModifier(newModifier);
-    globalScene.playSound("item_fanfare");
+    audioManager.playSound("se/item_fanfare");
     await showEncounterText(i18next.t("battle:rewardGain", { modifierName: newModifier?.type.name }));
 
-    await showEncounterDialogue(`${namespace}:victory_2`, `${namespace}:speaker`);
+    await showEncounterDialogue(`${namespace}:victory2`, `${namespace}:speaker`);
     globalScene.ui.clearText(); // Clears "Winstrate" title from screen as rewards get animated in
     const machoBrace = generateModifierTypeOption(modifierTypes.MYSTERY_ENCOUNTER_MACHO_BRACE)!;
     machoBrace.type.tier = ModifierTier.MASTER;
@@ -173,8 +178,6 @@ async function spawnNextTrainerOrEndEncounter() {
     });
     encounter.doContinueEncounter = undefined;
     leaveEncounterWithoutBattle(false, MysteryEncounterMode.NO_BATTLE);
-  } else {
-    await initBattleWithEnemyConfig(nextConfig);
   }
 }
 
@@ -212,9 +215,9 @@ function endTrainerBattleAndShowDialogue(): Promise<void> {
         // Only trigger form change when Eiscue is in Noice form
         // Hardcoded Eiscue for now in case it is fused with another pokemon
         if (
-          pokemon.species.speciesId === SpeciesId.EISCUE &&
-          pokemon.hasAbility(AbilityId.ICE_FACE) &&
-          pokemon.formIndex === 1
+          pokemon.species.speciesId === SpeciesId.EISCUE
+          && pokemon.hasAbility(AbilityId.ICE_FACE)
+          && pokemon.formIndex === 1
         ) {
           globalScene.triggerPokemonFormChange(pokemon, SpeciesFormChangeAbilityTrigger);
         }
@@ -253,7 +256,7 @@ function getVictorTrainerConfig(): EnemyPartyConfig {
     trainerType: TrainerType.VICTOR,
     pokemonConfigs: [
       {
-        species: getPokemonSpecies(SpeciesId.SWELLOW),
+        species: speciesDataRegistry.getSpecies(SpeciesId.SWELLOW),
         isBoss: false,
         abilityIndex: 0, // Guts
         nature: Nature.ADAMANT,
@@ -271,7 +274,7 @@ function getVictorTrainerConfig(): EnemyPartyConfig {
         ],
       },
       {
-        species: getPokemonSpecies(SpeciesId.OBSTAGOON),
+        species: speciesDataRegistry.getSpecies(SpeciesId.OBSTAGOON),
         isBoss: false,
         abilityIndex: 1, // Guts
         nature: Nature.ADAMANT,
@@ -297,7 +300,7 @@ function getVictoriaTrainerConfig(): EnemyPartyConfig {
     trainerType: TrainerType.VICTORIA,
     pokemonConfigs: [
       {
-        species: getPokemonSpecies(SpeciesId.ROSERADE),
+        species: speciesDataRegistry.getSpecies(SpeciesId.ROSERADE),
         isBoss: false,
         abilityIndex: 0, // Natural Cure
         nature: Nature.CALM,
@@ -315,7 +318,7 @@ function getVictoriaTrainerConfig(): EnemyPartyConfig {
         ],
       },
       {
-        species: getPokemonSpecies(SpeciesId.GARDEVOIR),
+        species: speciesDataRegistry.getSpecies(SpeciesId.GARDEVOIR),
         isBoss: false,
         formIndex: 1,
         nature: Nature.TIMID,
@@ -346,7 +349,7 @@ function getViviTrainerConfig(): EnemyPartyConfig {
     trainerType: TrainerType.VIVI,
     pokemonConfigs: [
       {
-        species: getPokemonSpecies(SpeciesId.SEAKING),
+        species: speciesDataRegistry.getSpecies(SpeciesId.SEAKING),
         isBoss: false,
         abilityIndex: 3, // Lightning Rod
         nature: Nature.ADAMANT,
@@ -365,7 +368,7 @@ function getViviTrainerConfig(): EnemyPartyConfig {
         ],
       },
       {
-        species: getPokemonSpecies(SpeciesId.BRELOOM),
+        species: speciesDataRegistry.getSpecies(SpeciesId.BRELOOM),
         isBoss: false,
         abilityIndex: 1, // Poison Heal
         nature: Nature.JOLLY,
@@ -383,7 +386,7 @@ function getViviTrainerConfig(): EnemyPartyConfig {
         ],
       },
       {
-        species: getPokemonSpecies(SpeciesId.CAMERUPT),
+        species: speciesDataRegistry.getSpecies(SpeciesId.CAMERUPT),
         isBoss: false,
         formIndex: 1,
         nature: Nature.CALM,
@@ -405,7 +408,7 @@ function getVickyTrainerConfig(): EnemyPartyConfig {
     trainerType: TrainerType.VICKY,
     pokemonConfigs: [
       {
-        species: getPokemonSpecies(SpeciesId.MEDICHAM),
+        species: speciesDataRegistry.getSpecies(SpeciesId.MEDICHAM),
         isBoss: false,
         formIndex: 1,
         nature: Nature.IMPISH,
@@ -426,7 +429,7 @@ function getVitoTrainerConfig(): EnemyPartyConfig {
     trainerType: TrainerType.VITO,
     pokemonConfigs: [
       {
-        species: getPokemonSpecies(SpeciesId.HISUI_ELECTRODE),
+        species: speciesDataRegistry.getSpecies(SpeciesId.HISUI_ELECTRODE),
         isBoss: false,
         abilityIndex: 0, // Soundproof
         nature: Nature.MODEST,
@@ -440,7 +443,7 @@ function getVitoTrainerConfig(): EnemyPartyConfig {
         ],
       },
       {
-        species: getPokemonSpecies(SpeciesId.SWALOT),
+        species: speciesDataRegistry.getSpecies(SpeciesId.SWALOT),
         isBoss: false,
         abilityIndex: 2, // Gluttony
         nature: Nature.QUIET,
@@ -493,7 +496,7 @@ function getVitoTrainerConfig(): EnemyPartyConfig {
         ],
       },
       {
-        species: getPokemonSpecies(SpeciesId.DODRIO),
+        species: speciesDataRegistry.getSpecies(SpeciesId.DODRIO),
         isBoss: false,
         abilityIndex: 2, // Tangled Feet
         nature: Nature.JOLLY,
@@ -507,7 +510,7 @@ function getVitoTrainerConfig(): EnemyPartyConfig {
         ],
       },
       {
-        species: getPokemonSpecies(SpeciesId.ALAKAZAM),
+        species: speciesDataRegistry.getSpecies(SpeciesId.ALAKAZAM),
         isBoss: false,
         formIndex: 1,
         nature: Nature.BOLD,
@@ -521,7 +524,7 @@ function getVitoTrainerConfig(): EnemyPartyConfig {
         ],
       },
       {
-        species: getPokemonSpecies(SpeciesId.DARMANITAN),
+        species: speciesDataRegistry.getSpecies(SpeciesId.DARMANITAN),
         isBoss: false,
         abilityIndex: 0, // Sheer Force
         nature: Nature.IMPISH,

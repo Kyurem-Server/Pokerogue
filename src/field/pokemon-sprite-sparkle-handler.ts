@@ -1,14 +1,16 @@
 import { globalScene } from "#app/global-scene";
-import Pokemon from "./pokemon";
-import { fixedInt, coerceArray, randInt } from "#app/utils/common";
+import { Pokemon } from "#field/pokemon";
+import { coerceArray } from "#utils/array";
+import { fixedInt, randInt } from "#utils/common";
 
-export default class PokemonSpriteSparkleHandler {
+export class PokemonSpriteSparkleHandler {
   private sprites: Set<Phaser.GameObjects.Sprite>;
 
-  setup(): void {
-    this.sprites = new Set();
+  private counterTween?: Phaser.Tweens.Tween | undefined;
 
-    globalScene.tweens.addCounter({
+  setup(): this {
+    this.sprites = new Set();
+    this.counterTween = globalScene.tweens.addCounter({
       duration: fixedInt(200),
       from: 0,
       to: 1,
@@ -16,6 +18,7 @@ export default class PokemonSpriteSparkleHandler {
       repeat: -1,
       onRepeat: () => this.onLapse(),
     });
+    return this;
   }
 
   onLapse(): void {
@@ -76,6 +79,14 @@ export default class PokemonSpriteSparkleHandler {
   removeAll(): void {
     for (const s of this.sprites.values()) {
       this.sprites.delete(s);
+    }
+  }
+
+  destroy(): void {
+    this.removeAll();
+    if (this.counterTween) {
+      this.counterTween.destroy();
+      this.counterTween = undefined;
     }
   }
 }

@@ -1,34 +1,42 @@
+import { pokerogueApi } from "#api/api";
 import { clientSessionId } from "#app/account";
-import { BattleType } from "#enums/battle-type";
+import { audioManager } from "#app/global-audio-manager";
 import { globalScene } from "#app/global-scene";
-import { pokemonEvolutions } from "#app/data/balance/pokemon-evolutions";
-import { getCharVariantFromDialogue } from "#app/data/dialogue";
-import type PokemonSpecies from "#app/data/pokemon-species";
-import { getPokemonSpecies } from "#app/utils/pokemon-utils";
-import { trainerConfigs } from "#app/data/trainers/trainer-config";
-import type Pokemon from "#app/field/pokemon";
-import { modifierTypes } from "#app/data/data-lists";
-import { BattlePhase } from "#app/phases/battle-phase";
-import type { EndCardPhase } from "#app/phases/end-card-phase";
-import { achvs, ChallengeAchv } from "#app/system/achv";
-import { Unlockables } from "#enums/unlockables";
-import { UiMode } from "#enums/ui-mode";
-import { isLocal, isLocalServerConnected } from "#app/utils/common";
+import { speciesDataRegistry } from "#app/global-species-data-registry";
+import { bypassLogin } from "#constants/app-constants";
+import { modifierTypes } from "#data/data-lists";
+import { getCharVariantFromDialogue } from "#data/dialogue";
+import type { PokemonSpecies } from "#data/pokemon-species";
+import { BattleType } from "#enums/battle-type";
+import { ChallengeType } from "#enums/challenge-type";
+import { Challenges } from "#enums/challenges";
 import { PlayerGender } from "#enums/player-gender";
 import { TrainerType } from "#enums/trainer-type";
+import { UiMode } from "#enums/ui-mode";
+import { Unlockables } from "#enums/unlockables";
+import type { Pokemon } from "#field/pokemon";
+import { BattlePhase } from "#phases/battle-phase";
+import type { EndCardPhase } from "#phases/end-card-phase";
+import { achvs, ChallengeAchv } from "#system/achv";
+import { ArenaData } from "#system/arena-data";
+import { ChallengeData } from "#system/challenge-data";
+import { ModifierData as PersistentModifierData } from "#system/modifier-data";
+import { PokemonData } from "#system/pokemon-data";
+import { RibbonData, type RibbonFlag } from "#system/ribbons/ribbon-data";
+import { awardRibbonsToSpeciesLine } from "#system/ribbons/ribbon-methods";
+import { TrainerData } from "#system/trainer-data";
+import { trainerConfigs } from "#trainers/trainer-config";
+import type { SessionSaveData } from "#types/save-data";
+import { applyChallenges, isNuzlockeChallenge } from "#utils/challenge-utils";
+import { fixedInt, isLocalServerConnected } from "#utils/common";
+import { ValueHolder } from "#utils/value-holder";
 import i18next from "i18next";
-import type { SessionSaveData } from "#app/system/game-data";
-import PersistentModifierData from "#app/system/modifier-data";
-import PokemonData from "#app/system/pokemon-data";
-import ChallengeData from "#app/system/challenge-data";
-import TrainerData from "#app/system/trainer-data";
-import ArenaData from "#app/system/arena-data";
-import { pokerogueApi } from "#app/plugins/api/pokerogue-api";
 
 export class GameOverPhase extends BattlePhase {
   public readonly phaseName = "GameOverPhase";
+
   private isVictory: boolean;
-  private firstRibbons: PokemonSpecies[] = [];
+  private readonly firstRibbons: PokemonSpecies[] = [];
 
   constructor(isVictory = false) {
     super();
@@ -49,9 +57,9 @@ export class GameOverPhase extends BattlePhase {
     // Handle Mystery Encounter special Game Over cases
     // Situations such as when player lost a battle, but it isn't treated as full Game Over
     if (
-      !this.isVictory &&
-      globalScene.currentBattle.mysteryEncounter?.onGameOver &&
-      !globalScene.currentBattle.mysteryEncounter.onGameOver()
+      !this.isVictory
+      && globalScene.currentBattle.mysteryEncounter?.onGameOver
+      && !globalScene.currentBattle.mysteryEncounter.onGameOver()
     ) {
       // Do not end the game
       return this.end();
@@ -62,10 +70,12 @@ export class GameOverPhase extends BattlePhase {
       const genderIndex = globalScene.gameData.gender ?? PlayerGender.UNSET;
       const genderStr = PlayerGender[genderIndex].toLowerCase();
       globalScene.ui.showDialogue(
-        i18next.t("miscDialogue:ending_endless", { context: genderStr }),
-        i18next.t("miscDialogue:ending_name"),
+        i18next.t("miscDialogue:endingEndless", { context: genderStr }),
+        i18next.t("miscDialogue:endingName"),
         0,
         () => this.handleGameOver(),
+        0,
+        fixedInt(3000),
       );
     } else if (this.isVictory || !globalScene.enableRetries) {
       this.handleGameOver();
@@ -82,13 +92,13 @@ export class GameOverPhase extends BattlePhase {
 
                 const availablePartyMembers = globalScene.getPokemonAllowedInBattle().length;
 
-                globalScene.phaseManager.pushNew("SummonPhase", 0);
+                globalScene.phaseManager.pushNew("SummonPhase", 0, true, true);
                 if (globalScene.currentBattle.double && availablePartyMembers > 1) {
-                  globalScene.phaseManager.pushNew("SummonPhase", 1);
+                  globalScene.phaseManager.pushNew("SummonPhase", 1, true, true);
                 }
                 if (
-                  globalScene.currentBattle.waveIndex > 1 &&
-                  globalScene.currentBattle.battleType !== BattleType.TRAINER
+                  globalScene.currentBattle.waveIndex > 1
+                  && globalScene.currentBattle.battleType !== BattleType.TRAINER
                 ) {
                   globalScene.phaseManager.pushNew("CheckSwitchPhase", 0, globalScene.currentBattle.double);
                   if (globalScene.currentBattle.double && availablePartyMembers > 1) {
@@ -111,6 +121,48 @@ export class GameOverPhase extends BattlePhase {
     }
   }
 
+  /**
+   * Submethod of {@linkcode handleGameOver} that awards ribbons to Pokémon in the player's party based on the current
+   * game mode and challenges.
+   */
+  private awardRibbons(): void {
+    let ribbonFlags = 0n;
+    for (const challenge of globalScene.gameMode.challenges) {
+      const ribbon = challenge.ribbonAwarded;
+      if (challenge.value && ribbon) {
+        ribbonFlags |= ribbon;
+      }
+    }
+
+    // TODO: find a better way to handle blocking ribbons and achievements
+    // Block other ribbons if flip stats or inverse is active
+    const flip_or_inverse = ribbonFlags & (RibbonData.FLIP_STATS | RibbonData.INVERSE);
+    // Block other ribbons if passives on `all` is active
+    const passives = ribbonFlags & RibbonData.PASSIVE_CHALLENGE;
+    if (flip_or_inverse) {
+      ribbonFlags = flip_or_inverse;
+    } else if (globalScene.gameMode.challenges.some(c => c.id === Challenges.PASSIVES && c.value === 2)) {
+      ribbonFlags = passives;
+    } else {
+      if (globalScene.gameMode.isClassic) {
+        ribbonFlags |= RibbonData.CLASSIC;
+      }
+      if (isNuzlockeChallenge()) {
+        ribbonFlags |= RibbonData.NUZLOCKE;
+      }
+    }
+    // Award ribbons to all Pokémon in the player's party that are considered valid
+    // for the current game mode and challenges (as in, they can be used in battle).
+    for (const pokemon of globalScene.getPlayerParty()) {
+      const species = pokemon.species;
+      const challengeAllowed = new ValueHolder(true);
+      applyChallenges(ChallengeType.POKEMON_IN_BATTLE, pokemon, challengeAllowed);
+      if (challengeAllowed.value) {
+        awardRibbonsToSpeciesLine(species.speciesId, ribbonFlags as RibbonFlag);
+      }
+    }
+  }
+
   handleGameOver(): void {
     const doGameOver = (newClear: boolean) => {
       globalScene.disableMenu = true;
@@ -122,19 +174,20 @@ export class GameOverPhase extends BattlePhase {
             globalScene.validateAchv(achvs.UNEVOLVED_CLASSIC_VICTORY);
             globalScene.gameData.gameStats.sessionsWon++;
             for (const pokemon of globalScene.getPlayerParty()) {
-              this.awardRibbon(pokemon);
-
+              this.awardFirstClassicCompletion(pokemon);
               if (pokemon.species.getRootSpeciesId() !== pokemon.species.getRootSpeciesId(true)) {
-                this.awardRibbon(pokemon, true);
+                this.awardFirstClassicCompletion(pokemon, true);
               }
             }
+            this.awardRibbons();
           } else if (globalScene.gameMode.isDaily && newClear) {
             globalScene.gameData.gameStats.dailyRunSessionsWon++;
+            globalScene.validateAchv(achvs.DAILY_VICTORY);
           }
         }
 
         const fadeDuration = this.isVictory ? 10000 : 5000;
-        globalScene.fadeOutBgm(fadeDuration, true);
+        audioManager.fadeOutBgm(fadeDuration);
         const activeBattlers = globalScene.getField().filter(p => p?.isActive(true));
         activeBattlers.map(p => p.hideInfo());
         globalScene.ui.fadeOut(fadeDuration).then(() => {
@@ -160,7 +213,7 @@ export class GameOverPhase extends BattlePhase {
             }
             this.getRunHistoryEntry().then(runHistoryEntry => {
               globalScene.gameData.saveRunHistory(runHistoryEntry, this.isVictory);
-              globalScene.phaseManager.pushNew("PostGameOverPhase", endCardPhase);
+              globalScene.phaseManager.pushNew("PostGameOverPhase", globalScene.sessionSlotId, endCardPhase);
               this.end();
             });
           };
@@ -168,7 +221,11 @@ export class GameOverPhase extends BattlePhase {
           if (this.isVictory && globalScene.gameMode.isClassic) {
             const dialogueKey = "miscDialogue:ending";
 
-            if (!globalScene.ui.shouldSkipDialogue(dialogueKey)) {
+            if (globalScene.ui.shouldSkipDialogue(dialogueKey)) {
+              const endCardPhase = globalScene.phaseManager.create("EndCardPhase");
+              globalScene.phaseManager.unshiftPhase(endCardPhase);
+              clear(endCardPhase);
+            } else {
               globalScene.ui.fadeIn(500).then(() => {
                 const genderIndex = globalScene.gameData.gender ?? PlayerGender.UNSET;
                 const genderStr = PlayerGender[genderIndex].toLowerCase();
@@ -198,10 +255,6 @@ export class GameOverPhase extends BattlePhase {
                     );
                   });
               });
-            } else {
-              const endCardPhase = globalScene.phaseManager.create("EndCardPhase");
-              globalScene.phaseManager.unshiftPhase(endCardPhase);
-              clear(endCardPhase);
             }
           } else {
             clear();
@@ -210,20 +263,18 @@ export class GameOverPhase extends BattlePhase {
       });
     };
 
-    /* Added a local check to see if the game is running offline
-      If Online, execute apiFetch as intended
-      If Offline, execute offlineNewClear() only for victory, a localStorage implementation of newClear daily run checks */
-    if (!isLocal || isLocalServerConnected) {
+    // If Online, execute apiFetch as intended
+    // If Offline, execute offlineNewClear() only for victory, a localStorage implementation of newClear daily run checks
+    if (!bypassLogin || isLocalServerConnected) {
       pokerogueApi.savedata.session
         .newclear({
           slot: globalScene.sessionSlotId,
           isVictory: this.isVictory,
-          clientSessionId: clientSessionId,
+          clientSessionId,
         })
         .then(success => doGameOver(!globalScene.gameMode.isDaily || !!success))
         .catch(_err => {
           globalScene.phaseManager.clearPhaseQueue();
-          globalScene.phaseManager.clearPhaseQueueSplice();
           globalScene.phaseManager.unshiftNew("MessagePhase", i18next.t("menu:serverCommunicationFailed"), 2500);
           // force the game to reload after 2 seconds.
           setTimeout(() => {
@@ -246,8 +297,8 @@ export class GameOverPhase extends BattlePhase {
         globalScene.phaseManager.unshiftNew("UnlockPhase", Unlockables.ENDLESS_MODE);
       }
       if (
-        globalScene.getPlayerParty().filter(p => p.fusionSpecies).length &&
-        !globalScene.gameData.unlocks[Unlockables.SPLICED_ENDLESS_MODE]
+        globalScene.getPlayerParty().filter(p => p.fusionSpecies).length > 0
+        && !globalScene.gameData.unlocks[Unlockables.SPLICED_ENDLESS_MODE]
       ) {
         globalScene.phaseManager.unshiftNew("UnlockPhase", Unlockables.SPLICED_ENDLESS_MODE);
       }
@@ -255,20 +306,20 @@ export class GameOverPhase extends BattlePhase {
         globalScene.phaseManager.unshiftNew("UnlockPhase", Unlockables.MINI_BLACK_HOLE);
       }
       if (
-        !globalScene.gameData.unlocks[Unlockables.EVIOLITE] &&
-        globalScene.getPlayerParty().some(p => p.getSpeciesForm(true).speciesId in pokemonEvolutions)
+        !globalScene.gameData.unlocks[Unlockables.EVIOLITE]
+        && globalScene.getPlayerParty().some(p => speciesDataRegistry.hasEvolutions(p.getSpeciesForm(true).speciesId))
       ) {
         globalScene.phaseManager.unshiftNew("UnlockPhase", Unlockables.EVIOLITE);
       }
     }
   }
 
-  awardRibbon(pokemon: Pokemon, forStarter = false): void {
-    const speciesId = getPokemonSpecies(pokemon.species.speciesId);
+  awardFirstClassicCompletion(pokemon: Pokemon, forStarter = false): void {
+    const speciesId = speciesDataRegistry.getSpecies(pokemon.species.speciesId);
     const speciesRibbonCount = globalScene.gameData.incrementRibbonCount(speciesId, forStarter);
     // first time classic win, award voucher
     if (speciesRibbonCount === 1) {
-      this.firstRibbons.push(getPokemonSpecies(pokemon.species.getRootSpeciesId(forStarter)));
+      this.firstRibbons.push(speciesDataRegistry.getSpecies(pokemon.species.getRootSpeciesId(forStarter)));
     }
   }
 

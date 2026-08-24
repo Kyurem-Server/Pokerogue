@@ -1,73 +1,65 @@
+import { audioManager } from "#app/global-audio-manager";
+import { timedEventManager } from "#app/global-event-manager";
 import { globalScene } from "#app/global-scene";
-import i18next from "i18next";
-import { isNullOrUndefined, randSeedInt } from "#app/utils/common";
-import { PokemonHeldItemModifier } from "#app/modifier/modifier";
-import type { EnemyPokemon, PlayerPokemon } from "#app/field/pokemon";
-import type Pokemon from "#app/field/pokemon";
+import { speciesDataRegistry } from "#app/global-species-data-registry";
+import { getPokemonNameWithAffix } from "#app/messages";
+import { modifierTypes } from "#data/data-lists";
+import { Gender } from "#data/gender";
 import {
   doPokeballBounceAnim,
   getPokeballAtlasKey,
   getPokeballCatchMultiplier,
   getPokeballTintColor,
-} from "#app/data/pokeball";
+} from "#data/pokeball";
+import { CustomPokemonData } from "#data/pokemon-data";
+import type { PokemonSpecies } from "#data/pokemon-species";
+import { getStatusEffectCatchRateMultiplier } from "#data/status-effect";
+import type { AbilityId } from "#enums/ability-id";
+import { ChallengeType } from "#enums/challenge-type";
+import { PartyUiMode } from "#enums/party-ui-mode";
 import { PlayerGender } from "#enums/player-gender";
-import { addPokeballCaptureStars, addPokeballOpenParticles } from "#app/field/anims";
-import { getStatusEffectCatchRateMultiplier } from "#app/data/status-effect";
-import { achvs } from "#app/system/achv";
-import { UiMode } from "#enums/ui-mode";
-import type { PartyOption } from "#app/ui/party-ui-handler";
-import { PartyUiMode } from "#app/ui/party-ui-handler";
-import { SpeciesId } from "#enums/species-id";
+import type { PokeballType } from "#enums/pokeball";
 import type { PokemonType } from "#enums/pokemon-type";
-import type PokemonSpecies from "#app/data/pokemon-species";
-import { getPokemonSpecies } from "#app/utils/pokemon-utils";
-import { speciesStarterCosts } from "#app/data/balance/starters";
+import { SpeciesId } from "#enums/species-id";
+import type { PermanentStat } from "#enums/stat";
+import { StatusEffect } from "#enums/status-effect";
+import { UiMode } from "#enums/ui-mode";
+import type { EnemyPokemon, PlayerPokemon, Pokemon } from "#field/pokemon";
+import { PokemonHeldItemModifier } from "#modifiers/modifier";
+import type { PokemonHeldItemModifierType } from "#modifiers/modifier-type";
 import {
   getEncounterText,
   queueEncounterMessage,
   showEncounterText,
-} from "#app/data/mystery-encounters/utils/encounter-dialogue-utils";
-import { getPokemonNameWithAffix } from "#app/messages";
-import type { PokemonHeldItemModifierType } from "#app/modifier/modifier-type";
-import { modifierTypes } from "#app/data/data-lists";
-import { Gender } from "#app/data/gender";
-import type { PermanentStat } from "#enums/stat";
-import { SummaryUiMode } from "#app/ui/summary-ui-handler";
-import { CustomPokemonData } from "#app/data/pokemon/pokemon-data";
-import type { AbilityId } from "#enums/ability-id";
-import type { PokeballType } from "#enums/pokeball";
-import { StatusEffect } from "#enums/status-effect";
+} from "#mystery-encounters/encounter-dialogue-utils";
+import { achvs } from "#system/achv";
+import type { PartyOption } from "#ui/party-ui-handler";
+import { SummaryUiMode } from "#ui/summary-ui-handler";
+import { applyChallenges } from "#utils/challenge-utils";
+import { BooleanHolder, randSeedInt } from "#utils/common";
+import i18next from "i18next";
 
 /** Will give +1 level every 10 waves */
 export const STANDARD_ENCOUNTER_BOOSTED_LEVEL_MODIFIER = 1;
 
 /**
  * Gets the sprite key and file root for a given PokemonSpecies (accounts for gender, shiny, variants, forms, and experimental)
- * @param species
+ * @param speciesId
  * @param female
  * @param formIndex
  * @param shiny
  * @param variant
  */
 export function getSpriteKeysFromSpecies(
-  species: SpeciesId,
+  speciesId: SpeciesId,
   female?: boolean,
   formIndex?: number,
   shiny?: boolean,
   variant?: number,
 ): { spriteKey: string; fileRoot: string } {
-  const spriteKey = getPokemonSpecies(species).getSpriteKey(
-    female ?? false,
-    formIndex ?? 0,
-    shiny ?? false,
-    variant ?? 0,
-  );
-  const fileRoot = getPokemonSpecies(species).getSpriteAtlasPath(
-    female ?? false,
-    formIndex ?? 0,
-    shiny ?? false,
-    variant ?? 0,
-  );
+  const species = speciesDataRegistry.getSpecies(speciesId);
+  const spriteKey = species.getSpriteKey(female ?? false, formIndex ?? 0, shiny ?? false, variant ?? 0);
+  const fileRoot = species.getSpriteAtlasPath(female ?? false, formIndex ?? 0, shiny ?? false, variant ?? 0);
   return { spriteKey, fileRoot };
 }
 
@@ -111,20 +103,24 @@ export function getRandomPlayerPokemon(
     // If there is only 1 legal/unfainted mon left, select from fainted legal mons
     const faintedLegalMons = party.filter(p => (!isAllowed || p.isAllowedInChallenge()) && p.isFainted());
     if (faintedLegalMons.length > 0) {
+      // TODO: should this use `randSeedItem`?
       chosenIndex = randSeedInt(faintedLegalMons.length);
       chosenPokemon = faintedLegalMons[chosenIndex];
     }
   }
   if (!chosenPokemon && fullyLegalMons.length > 0) {
+    // TODO: should this use `randSeedItem`?
     chosenIndex = randSeedInt(fullyLegalMons.length);
     chosenPokemon = fullyLegalMons[chosenIndex];
   }
   if (!chosenPokemon && isAllowed && allowedOnlyMons.length > 0) {
+    // TODO: should this use `randSeedItem`?
     chosenIndex = randSeedInt(allowedOnlyMons.length);
     chosenPokemon = allowedOnlyMons[chosenIndex];
   }
   if (!chosenPokemon) {
     // If no other options worked, returns fully random
+    // TODO: should this use `randSeedItem`?
     chosenIndex = randSeedInt(party.length);
     chosenPokemon = party[chosenIndex];
   }
@@ -255,23 +251,23 @@ export function getRandomSpeciesByStarterCost(
   let min = Array.isArray(starterTiers) ? starterTiers[0] : starterTiers;
   let max = Array.isArray(starterTiers) ? starterTiers[1] : starterTiers;
 
-  let filteredSpecies: [PokemonSpecies, number][] = Object.keys(speciesStarterCosts)
-    .map(s => [Number.parseInt(s) as SpeciesId, speciesStarterCosts[s] as number])
-    .filter(s => {
-      const pokemonSpecies = getPokemonSpecies(s[0]);
-      return (
-        pokemonSpecies &&
-        (!excludedSpecies || !excludedSpecies.includes(s[0])) &&
-        (allowSubLegendary || !pokemonSpecies.subLegendary) &&
-        (allowLegendary || !pokemonSpecies.legendary) &&
-        (allowMythical || !pokemonSpecies.mythical)
-      );
-    })
-    .map(s => [getPokemonSpecies(s[0]), s[1]]);
+  let filteredSpecies: [species: PokemonSpecies, cost: number][] = [];
+
+  for (const species of speciesDataRegistry.getAllStarters(true)) {
+    if (
+      species
+      && !excludedSpecies?.includes(species.speciesId)
+      && (allowSubLegendary || !species.subLegendary)
+      && (allowLegendary || !species.legendary)
+      && (allowMythical || !species.mythical)
+    ) {
+      filteredSpecies.push([species, speciesDataRegistry.getStarterCost(species.speciesId)]);
+    }
+  }
 
   if (types && types.length > 0) {
     filteredSpecies = filteredSpecies.filter(
-      s => types.includes(s[0].type1) || (!isNullOrUndefined(s[0].type2) && types.includes(s[0].type2)),
+      s => types.includes(s[0].type1) || (s[0].type2 != null && types.includes(s[0].type2)),
     );
   }
 
@@ -304,7 +300,7 @@ export function getRandomSpeciesByStarterCost(
  */
 export function koPlayerPokemon(pokemon: PlayerPokemon) {
   pokemon.hp = 0;
-  pokemon.trySetStatus(StatusEffect.FAINT);
+  pokemon.doSetStatus(StatusEffect.FAINT);
   pokemon.updateInfo();
   queueEncounterMessage(
     i18next.t("battle:fainted", {
@@ -403,12 +399,12 @@ export async function applyModifierTypeToPlayerPokemon(
   // Check if the Pokemon has max stacks of that item already
   const modifier = modType.newModifier(pokemon);
   const existing = globalScene.findModifier(
-    m =>
-      m instanceof PokemonHeldItemModifier &&
-      m.type.id === modType.id &&
-      m.pokemonId === pokemon.id &&
-      m.matchType(modifier),
-  ) as PokemonHeldItemModifier;
+    (m): m is PokemonHeldItemModifier =>
+      m instanceof PokemonHeldItemModifier
+      && m.type.id === modType.id
+      && m.pokemonId === pokemon.id
+      && m.matchType(modifier),
+  ) as PokemonHeldItemModifier | undefined;
 
   // At max stacks
   if (existing && existing.getStackCount() >= existing.getMaxStackCount()) {
@@ -447,7 +443,8 @@ export function trainerThrowPokeball(
     const catchRate = pokemon.species.catchRate;
     const pokeballMultiplier = getPokeballCatchMultiplier(pokeballType);
     const statusMultiplier = pokemon.status ? getStatusEffectCatchRateMultiplier(pokemon.status.effect) : 1;
-    const x = Math.round((((_3m - _2h) * catchRate * pokeballMultiplier) / _3m) * statusMultiplier);
+    const shinyMultiplier = pokemon.isShiny() ? timedEventManager.getShinyCatchMultiplier() : 1;
+    const x = Math.round((((_3m - _2h) * catchRate * pokeballMultiplier) / _3m) * statusMultiplier * shinyMultiplier);
     ballTwitchRate = Math.round(65536 / Math.sqrt(Math.sqrt(255 / x)));
   }
 
@@ -466,7 +463,7 @@ export function trainerThrowPokeball(
       `trainer_${globalScene.gameData.gender === PlayerGender.FEMALE ? "f" : "m"}_back_pb`,
     );
     globalScene.time.delayedCall(512, () => {
-      globalScene.playSound("se/pb_throw");
+      audioManager.playSound("se/pb_throw");
 
       // Trainer throw frames
       globalScene.trainer.setFrame("2");
@@ -488,10 +485,10 @@ export function trainerThrowPokeball(
         onComplete: () => {
           pokeball.setTexture("pb", `${pokeballAtlasKey}_opening`);
           globalScene.time.delayedCall(17, () => pokeball.setTexture("pb", `${pokeballAtlasKey}_open`));
-          globalScene.playSound("se/pb_rel");
+          audioManager.playSound("se/pb_rel");
           pokemon.tint(getPokeballTintColor(pokeballType));
 
-          addPokeballOpenParticles(pokeball.x, pokeball.y, pokeballType);
+          globalScene.animations.addPokeballOpenParticles(pokeball.x, pokeball.y, pokeballType);
 
           globalScene.tweens.add({
             targets: pokemon,
@@ -502,7 +499,7 @@ export function trainerThrowPokeball(
             onComplete: () => {
               pokeball.setTexture("pb", `${pokeballAtlasKey}_opening`);
               pokemon.setVisible(false);
-              globalScene.playSound("se/pb_catch");
+              audioManager.playSound("se/pb_catch");
               globalScene.time.delayedCall(17, () => pokeball.setTexture("pb", `${pokeballAtlasKey}`));
 
               const doShake = () => {
@@ -518,26 +515,23 @@ export function trainerThrowPokeball(
                   repeatDelay: 500,
                   onUpdate: t => {
                     if (shakeCount && shakeCount < 4) {
-                      const value = t.getValue();
+                      const value = t.getValue() ?? 0;
                       const directionMultiplier = shakeCount % 2 === 1 ? 1 : -1;
                       pokeball.setX(pbX + value * 4 * directionMultiplier);
                       pokeball.setAngle(value * 27.5 * directionMultiplier);
                     }
                   },
                   onRepeat: () => {
-                    if (!pokemon.species.isObtainable()) {
-                      shakeCounter.stop();
-                      failCatch(pokemon, originalY, pokeball, pokeballType).then(() => resolve(false));
-                    } else if (shakeCount++ < 3) {
+                    if (shakeCount++ < 3) {
                       if (randSeedInt(65536) < ballTwitchRate) {
-                        globalScene.playSound("se/pb_move");
+                        audioManager.playSound("se/pb_move");
                       } else {
                         shakeCounter.stop();
                         failCatch(pokemon, originalY, pokeball, pokeballType).then(() => resolve(false));
                       }
                     } else {
-                      globalScene.playSound("se/pb_lock");
-                      addPokeballCaptureStars(pokeball);
+                      audioManager.playSound("se/pb_lock");
+                      globalScene.animations.addPokeballCaptureStars(pokeball);
 
                       const pbTint = globalScene.add.sprite(pokeball.x, pokeball.y, "pb", "pb");
                       pbTint.setOrigin(pokeball.originX, pokeball.originY);
@@ -591,7 +585,7 @@ function failCatch(
   pokeballType: PokeballType,
 ) {
   return new Promise<void>(resolve => {
-    globalScene.playSound("se/pb_rel");
+    audioManager.playSound("se/pb_rel");
     pokemon.setY(originalY);
     if (pokemon.status?.effect !== StatusEffect.SLEEP) {
       pokemon.cry(pokemon.getHpRatio() > 0.25 ? undefined : { rate: 0.85 });
@@ -642,11 +636,11 @@ export async function catchPokemon(
   showCatchObtainMessage = true,
   isObtain = false,
 ): Promise<void> {
-  const speciesForm = !pokemon.fusionSpecies ? pokemon.getSpeciesForm() : pokemon.getFusionSpeciesForm();
+  const speciesForm = pokemon.fusionSpecies ? pokemon.getFusionSpeciesForm() : pokemon.getSpeciesForm();
 
   if (
-    speciesForm.abilityHidden &&
-    (pokemon.fusionSpecies ? pokemon.fusionAbilityIndex : pokemon.abilityIndex) === speciesForm.getAbilityCount() - 1
+    speciesForm.abilityHidden
+    && (pokemon.fusionSpecies ? pokemon.fusionAbilityIndex : pokemon.abilityIndex) === speciesForm.getAbilityCount() - 1
   ) {
     globalScene.validateAchv(achvs.HIDDEN_ABILITY);
   }
@@ -668,6 +662,8 @@ export async function catchPokemon(
   globalScene.gameData.updateSpeciesDexIvs(pokemon.species.getRootSpeciesId(true), pokemon.ivs);
 
   return new Promise(resolve => {
+    const addStatus = new BooleanHolder(true);
+    applyChallenges(ChallengeType.POKEMON_ADD_TO_PARTY, pokemon, addStatus);
     const doPokemonCatchMenu = () => {
       const end = () => {
         // Ensure the pokemon is in the enemy party in all situations
@@ -703,6 +699,11 @@ export async function catchPokemon(
         });
       };
       Promise.all([pokemon.hideInfo(), globalScene.gameData.setPokemonCaught(pokemon)]).then(() => {
+        if (!(isObtain || addStatus.value)) {
+          removePokemon();
+          end();
+          return;
+        }
         if (globalScene.getPlayerParty().length === 6) {
           const promptRelease = () => {
             globalScene.ui.showText(
@@ -795,10 +796,16 @@ export async function catchPokemon(
     };
 
     if (showCatchObtainMessage) {
+      let catchMessage: string;
+      if (isObtain) {
+        catchMessage = "battle:pokemonObtained";
+      } else if (addStatus.value) {
+        catchMessage = "battle:pokemonCaught";
+      } else {
+        catchMessage = "battle:pokemonCaughtButChallenge";
+      }
       globalScene.ui.showText(
-        i18next.t(isObtain ? "battle:pokemonObtained" : "battle:pokemonCaught", {
-          pokemonName: pokemon.getNameToRender(),
-        }),
+        i18next.t(catchMessage, { pokemonName: pokemon.getNameToRender() }),
         null,
         doPokemonCatchMenu,
         0,
@@ -837,7 +844,7 @@ function removePb(pokeball: Phaser.GameObjects.Sprite) {
  */
 export async function doPokemonFlee(pokemon: EnemyPokemon): Promise<void> {
   await new Promise<void>(resolve => {
-    globalScene.playSound("se/flee");
+    audioManager.playSound("se/flee");
     // Ease pokemon out
     globalScene.tweens.add({
       targets: pokemon,
@@ -944,13 +951,15 @@ export function getGoldenBugNetSpecies(level: number): PokemonSpecies {
   for (const speciesWeightPair of GOLDEN_BUG_NET_SPECIES_POOL) {
     w += speciesWeightPair[1];
     if (roll < w) {
-      const initialSpecies = getPokemonSpecies(speciesWeightPair[0]);
-      return getPokemonSpecies(initialSpecies.getSpeciesForLevel(level, true));
+      const initialSpecies = speciesDataRegistry.getSpecies(speciesWeightPair[0]);
+      return speciesDataRegistry.getSpecies(
+        initialSpecies.getWildSpeciesForLevel(level, true, false, globalScene.gameMode),
+      );
     }
   }
 
   // Defaults to Scyther
-  return getPokemonSpecies(SpeciesId.SCYTHER);
+  return speciesDataRegistry.getSpecies(SpeciesId.SCYTHER);
 }
 
 /**
@@ -967,11 +976,11 @@ export function getEncounterPokemonLevelForWave(levelAdditiveModifier = 0) {
 }
 
 export async function addPokemonDataToDexAndValidateAchievements(pokemon: PlayerPokemon) {
-  const speciesForm = !pokemon.fusionSpecies ? pokemon.getSpeciesForm() : pokemon.getFusionSpeciesForm();
+  const speciesForm = pokemon.fusionSpecies ? pokemon.getFusionSpeciesForm() : pokemon.getSpeciesForm();
 
   if (
-    speciesForm.abilityHidden &&
-    (pokemon.fusionSpecies ? pokemon.fusionAbilityIndex : pokemon.abilityIndex) === speciesForm.getAbilityCount() - 1
+    speciesForm.abilityHidden
+    && (pokemon.fusionSpecies ? pokemon.fusionAbilityIndex : pokemon.abilityIndex) === speciesForm.getAbilityCount() - 1
   ) {
     globalScene.validateAchv(achvs.HIDDEN_ABILITY);
   }

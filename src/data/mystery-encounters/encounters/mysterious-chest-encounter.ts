@@ -1,28 +1,25 @@
-import { globalScene } from "#app/global-scene";
-import type MysteryEncounter from "#app/data/mystery-encounters/mystery-encounter";
-import { MysteryEncounterBuilder } from "#app/data/mystery-encounters/mystery-encounter";
-import { MysteryEncounterOptionBuilder } from "#app/data/mystery-encounters/mystery-encounter-option";
-import { queueEncounterMessage, showEncounterText } from "#app/data/mystery-encounters/utils/encounter-dialogue-utils";
-import type { EnemyPartyConfig } from "#app/data/mystery-encounters/utils/encounter-phase-utils";
-import {
-  initBattleWithEnemyConfig,
-  leaveEncounterWithoutBattle,
-  setEncounterRewards,
-  transitionMysteryEncounterIntroVisuals,
-} from "#app/data/mystery-encounters/utils/encounter-phase-utils";
-import {
-  getHighestLevelPlayerPokemon,
-  koPlayerPokemon,
-} from "#app/data/mystery-encounters/utils/encounter-pokemon-utils";
-import { getPokemonSpecies } from "#app/utils/pokemon-utils";
 import { CLASSIC_MODE_MYSTERY_ENCOUNTER_WAVES } from "#app/constants";
+import { globalScene } from "#app/global-scene";
+import { speciesDataRegistry } from "#app/global-species-data-registry";
 import { ModifierTier } from "#enums/modifier-tier";
-import { randSeedInt } from "#app/utils/common";
 import { MoveId } from "#enums/move-id";
 import { MysteryEncounterOptionMode } from "#enums/mystery-encounter-option-mode";
 import { MysteryEncounterTier } from "#enums/mystery-encounter-tier";
 import { MysteryEncounterType } from "#enums/mystery-encounter-type";
 import { SpeciesId } from "#enums/species-id";
+import { queueEncounterMessage, showEncounterText } from "#mystery-encounters/encounter-dialogue-utils";
+import type { EnemyPartyConfig } from "#mystery-encounters/encounter-phase-utils";
+import {
+  initBattleWithEnemyConfig,
+  leaveEncounterWithoutBattle,
+  setEncounterRewards,
+  transitionMysteryEncounterIntroVisuals,
+} from "#mystery-encounters/encounter-phase-utils";
+import { getHighestLevelPlayerPokemon, koPlayerPokemon } from "#mystery-encounters/encounter-pokemon-utils";
+import type { MysteryEncounter } from "#mystery-encounters/mystery-encounter";
+import { MysteryEncounterBuilder } from "#mystery-encounters/mystery-encounter";
+import { MysteryEncounterOptionBuilder } from "#mystery-encounters/mystery-encounter-option";
+import { randSeedInt } from "#utils/common";
 
 /** i18n namespace for encounter */
 const namespace = "mysteryEncounters/mysteriousChest";
@@ -44,7 +41,7 @@ export const MysteriousChestEncounter: MysteryEncounter = MysteryEncounterBuilde
 )
   .withEncounterTier(MysteryEncounterTier.COMMON)
   .withSceneWaveRangeRequirement(...CLASSIC_MODE_MYSTERY_ENCOUNTER_WAVES)
-  .withScenePartySizeRequirement(2, 6, true)
+  .withScenePartySizeRequirement(2)
   .withAutoHideIntroVisuals(false)
   .withCatchAllowed(true)
   .withIntroSpriteConfigs([
@@ -85,7 +82,7 @@ export const MysteriousChestEncounter: MysteryEncounter = MysteryEncounterBuilde
       disableSwitch: true,
       pokemonConfigs: [
         {
-          species: getPokemonSpecies(SpeciesId.GIMMIGHOUL),
+          species: speciesDataRegistry.getSpecies(SpeciesId.GIMMIGHOUL),
           formIndex: 0,
           isBoss: true,
           moveSet: [MoveId.NASTY_PLOT, MoveId.SHADOW_BALL, MoveId.POWER_GEM, MoveId.THIEF],
@@ -95,7 +92,7 @@ export const MysteriousChestEncounter: MysteryEncounter = MysteryEncounterBuilde
 
     encounter.enemyPartyConfigs = [config];
 
-    encounter.setDialogueToken("gimmighoulName", getPokemonSpecies(SpeciesId.GIMMIGHOUL).getName());
+    encounter.setDialogueToken("gimmighoulName", speciesDataRegistry.getSpecies(SpeciesId.GIMMIGHOUL).getName());
     encounter.setDialogueToken("trapPercent", TRAP_PERCENT.toString());
     encounter.setDialogueToken("commonPercent", COMMON_REWARDS_PERCENT.toString());
     encounter.setDialogueToken("ultraPercent", ULTRA_REWARDS_PERCENT.toString());
@@ -166,8 +163,12 @@ export const MysteriousChestEncounter: MysteryEncounter = MysteryEncounterBuilde
           queueEncounterMessage(`${namespace}:option.1.great`);
           leaveEncounterWithoutBattle();
         } else if (
-          roll >=
-          RAND_LENGTH - COMMON_REWARDS_PERCENT - ULTRA_REWARDS_PERCENT - ROGUE_REWARDS_PERCENT - MASTER_REWARDS_PERCENT
+          roll
+          >= RAND_LENGTH
+            - COMMON_REWARDS_PERCENT
+            - ULTRA_REWARDS_PERCENT
+            - ROGUE_REWARDS_PERCENT
+            - MASTER_REWARDS_PERCENT
         ) {
           // Choose 1 MASTER tier item (5%)
           setEncounterRewards({

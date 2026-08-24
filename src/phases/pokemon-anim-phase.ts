@@ -1,10 +1,10 @@
+import { audioManager } from "#app/global-audio-manager";
 import { globalScene } from "#app/global-scene";
-import { SubstituteTag } from "#app/data/battler-tags";
-import type Pokemon from "#app/field/pokemon";
-import { BattlePhase } from "#app/phases/battle-phase";
-import { isNullOrUndefined } from "#app/utils/common";
+import { SubstituteTag } from "#data/battler-tags";
 import { PokemonAnimType } from "#enums/pokemon-anim-type";
 import { SpeciesId } from "#enums/species-id";
+import type { Pokemon } from "#field/pokemon";
+import { BattlePhase } from "#phases/battle-phase";
 
 export class PokemonAnimPhase extends BattlePhase {
   public readonly phaseName = "PokemonAnimPhase";
@@ -52,7 +52,7 @@ export class PokemonAnimPhase extends BattlePhase {
 
   private doSubstituteAddAnim(): void {
     const substitute = this.pokemon.getTag(SubstituteTag);
-    if (isNullOrUndefined(substitute)) {
+    if (substitute == null) {
       this.end();
       return;
     }
@@ -80,7 +80,7 @@ export class PokemonAnimPhase extends BattlePhase {
       globalScene.field.bringToTop(this.pokemon);
     }
 
-    globalScene.playSound("PRSFX- Transform");
+    audioManager.playSound("PRSFX- Transform");
 
     globalScene.tweens.add({
       targets: this.pokemon,
@@ -218,7 +218,7 @@ export class PokemonAnimPhase extends BattlePhase {
           repeat: 7,
           startAt: 200,
           callback: () => {
-            globalScene.playSound("PRSFX- Substitute2.wav");
+            audioManager.playSound("PRSFX- Substitute2.wav");
 
             subTintSprite.setVisible(flashTimer.repeatCount % 2 === 0);
             if (!flashTimer.repeatCount) {
@@ -293,7 +293,7 @@ export class PokemonAnimPhase extends BattlePhase {
     const sourceFpOffset = this.pokemon.getFieldPositionOffset();
     const dondozoFpOffset = dondozo.getFieldPositionOffset();
 
-    globalScene.playSound("se/pb_throw");
+    audioManager.playSound("se/pb_throw");
 
     globalScene.tweens.add({
       targets: sourceSprite,
@@ -317,7 +317,7 @@ export class PokemonAnimPhase extends BattlePhase {
           y: { value: dondozo.y + dondozo.height / 2, ease: "Sine.easeIn" },
           onComplete: () => {
             sourceSprite.destroy();
-            globalScene.playSound("battle_anims/PRSFX- Liquidation1.wav");
+            audioManager.playSound("battle_anims/PRSFX- Liquidation1.wav");
             globalScene.tweens.add({
               targets: dondozo,
               duration: 250,
@@ -336,7 +336,7 @@ export class PokemonAnimPhase extends BattlePhase {
     // Note: unlike the other Commander animation, this is played through the
     // Dondozo instead of the Tatsugiri.
     const tatsugiri = this.pokemon.getAlly();
-    if (isNullOrUndefined(tatsugiri)) {
+    if (tatsugiri == null) {
       console.warn("Aborting COMMANDER_REMOVE anim: Tatsugiri is undefined");
       this.end();
       return;
@@ -373,7 +373,7 @@ export class PokemonAnimPhase extends BattlePhase {
       scale: 1.15,
       yoyo: true,
       onComplete: () => {
-        globalScene.playSound("battle_anims/PRSFX- Liquidation4.wav");
+        audioManager.playSound("battle_anims/PRSFX- Liquidation4.wav");
         globalScene.tweens.add({
           targets: tatsuSprite,
           duration: 500,

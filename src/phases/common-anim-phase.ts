@@ -1,28 +1,23 @@
-import type { BattlerIndex } from "#enums/battler-index";
 import { globalScene } from "#app/global-scene";
+import { CommonBattleAnim } from "#data/battle-anims";
+import type { BattlerIndex } from "#enums/battler-index";
 import type { CommonAnim } from "#enums/move-anims-common";
-import { CommonBattleAnim } from "#app/data/battle-anims";
-import { PokemonPhase } from "./pokemon-phase";
+import { PokemonPhase } from "#phases/pokemon-phase";
 
 export class CommonAnimPhase extends PokemonPhase {
   // PokemonHealPhase extends CommonAnimPhase, and to make typescript happy,
   // we need to allow phaseName to be a union of the two
   public readonly phaseName: "CommonAnimPhase" | "PokemonHealPhase" | "WeatherEffectPhase" = "CommonAnimPhase";
   private anim: CommonAnim | null;
-  private targetIndex?: BattlerIndex;
-  private playOnEmptyField: boolean;
+  private targetIndex?: BattlerIndex | undefined;
 
-  constructor(
-    battlerIndex?: BattlerIndex,
-    targetIndex?: BattlerIndex,
-    anim: CommonAnim | null = null,
-    playOnEmptyField = false,
-  ) {
+  // TODO: Why can common anim be null?
+  // TODO: Pass in pokemon directly instead of operating with unsafe indices
+  constructor(battlerIndex?: BattlerIndex, targetIndex?: BattlerIndex, anim: CommonAnim | null = null) {
     super(battlerIndex);
 
     this.anim = anim;
     this.targetIndex = targetIndex;
-    this.playOnEmptyField = playOnEmptyField;
   }
 
   setAnimation(anim: CommonAnim) {
@@ -31,9 +26,9 @@ export class CommonAnimPhase extends PokemonPhase {
 
   start() {
     const target =
-      this.targetIndex !== undefined
-        ? (this.player ? globalScene.getEnemyField() : globalScene.getPlayerField())[this.targetIndex]
-        : this.getPokemon();
+      this.targetIndex === undefined
+        ? this.getPokemon()
+        : (this.player ? globalScene.getEnemyField() : globalScene.getPlayerField())[this.targetIndex];
     new CommonBattleAnim(this.anim, this.getPokemon(), target).play(false, () => {
       this.end();
     });

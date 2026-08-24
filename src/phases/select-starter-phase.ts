@@ -1,33 +1,32 @@
+import { audioManager } from "#app/global-audio-manager";
 import { globalScene } from "#app/global-scene";
-import { applyChallenges } from "#app/data/challenge";
-import { ChallengeType } from "#enums/challenge-type";
-import { Gender } from "#app/data/gender";
-import { SpeciesFormChangeMoveLearnedTrigger } from "#app/data/pokemon-forms/form-change-triggers";
-import { getPokemonSpecies } from "#app/utils/pokemon-utils";
-import { overrideHeldItems, overrideModifiers } from "#app/modifier/modifier";
-import Overrides from "#app/overrides";
+import { speciesDataRegistry } from "#app/global-species-data-registry";
+import { activeOverrides } from "#app/overrides";
 import { Phase } from "#app/phase";
-import { SaveSlotUiMode } from "#app/ui/save-slot-select-ui-handler";
-import type { Starter } from "#app/ui/starter-select-ui-handler";
+import { SpeciesFormChangeMoveLearnedTrigger } from "#data/form-change-triggers";
+import { Gender } from "#data/gender";
+import { ChallengeType } from "#enums/challenge-type";
 import { UiMode } from "#enums/ui-mode";
-import type { SpeciesId } from "#enums/species-id";
-import SoundFade from "phaser3-rex-plugins/plugins/soundfade";
-import { isNullOrUndefined } from "#app/utils/common";
+import { overrideHeldItems, overrideModifiers } from "#modifiers/modifier";
+import type { Starter } from "#types/save-data";
+import { SaveSlotUiMode } from "#ui/handlers/save-slot-select-ui-handler";
+import { applyChallenges } from "#utils/challenge-utils";
 
 export class SelectStarterPhase extends Phase {
   public readonly phaseName = "SelectStarterPhase";
   start() {
     super.start();
 
-    globalScene.playBgm("menu");
+    audioManager.playBgm("menu");
 
     globalScene.ui.setMode(UiMode.STARTER_SELECT, (starters: Starter[]) => {
       globalScene.ui.clearText();
       globalScene.ui.setMode(UiMode.SAVE_SLOT, SaveSlotUiMode.SAVE, (slotId: number) => {
+        // If clicking cancel, back out to title screen
         if (slotId === -1) {
-          globalScene.phaseManager.clearPhaseQueue();
-          globalScene.phaseManager.pushNew("TitlePhase");
-          return this.end();
+          globalScene.phaseManager.toTitleScreen();
+          this.end();
+          return;
         }
         globalScene.sessionSlotId = slotId;
         this.initBattle(starters);
@@ -37,48 +36,49 @@ export class SelectStarterPhase extends Phase {
 
   /**
    * Initialize starters before starting the first battle
-   * @param starters {@linkcode Pokemon} with which to start the first battle
+   * @param starters - Array of {@linkcode Starter}s with which to start the battle
    */
   initBattle(starters: Starter[]) {
     const party = globalScene.getPlayerParty();
     const loadPokemonAssets: Promise<void>[] = [];
     starters.forEach((starter: Starter, i: number) => {
-      if (!i && Overrides.STARTER_SPECIES_OVERRIDE) {
-        starter.species = getPokemonSpecies(Overrides.STARTER_SPECIES_OVERRIDE as SpeciesId);
+      if (!i && activeOverrides.STARTER_SPECIES_OVERRIDE) {
+        starter.speciesId = activeOverrides.STARTER_SPECIES_OVERRIDE;
       }
-      const starterProps = globalScene.gameData.getSpeciesDexAttrProps(starter.species, starter.dexAttr);
-      let starterFormIndex = Math.min(starterProps.formIndex, Math.max(starter.species.forms.length - 1, 0));
+      const species = speciesDataRegistry.getSpecies(starter.speciesId);
+      let starterFormIndex = starter.formIndex;
       if (
-        starter.species.speciesId in Overrides.STARTER_FORM_OVERRIDES &&
-        !isNullOrUndefined(Overrides.STARTER_FORM_OVERRIDES[starter.species.speciesId]) &&
-        starter.species.forms[Overrides.STARTER_FORM_OVERRIDES[starter.species.speciesId]!]
+        starter.speciesId in activeOverrides.STARTER_FORM_OVERRIDES
+        && activeOverrides.STARTER_FORM_OVERRIDES[starter.speciesId] != null
+        && species.forms[activeOverrides.STARTER_FORM_OVERRIDES[starter.speciesId]!]
       ) {
-        starterFormIndex = Overrides.STARTER_FORM_OVERRIDES[starter.species.speciesId]!;
+        starterFormIndex = activeOverrides.STARTER_FORM_OVERRIDES[starter.speciesId]!;
       }
 
       let starterGender =
-        starter.species.malePercent !== null ? (!starterProps.female ? Gender.MALE : Gender.FEMALE) : Gender.GENDERLESS;
-      if (Overrides.GENDER_OVERRIDE !== null) {
-        starterGender = Overrides.GENDER_OVERRIDE;
+        species.malePercent === null ? Gender.GENDERLESS : starter.female ? Gender.FEMALE : Gender.MALE;
+      if (activeOverrides.GENDER_OVERRIDE !== null) {
+        starterGender = activeOverrides.GENDER_OVERRIDE;
       }
-      const starterIvs = globalScene.gameData.dexData[starter.species.speciesId].ivs.slice(0);
       const starterPokemon = globalScene.addPlayerPokemon(
-        starter.species,
+        species,
         globalScene.gameMode.getStartingLevel(),
         starter.abilityIndex,
         starterFormIndex,
         starterGender,
-        starterProps.shiny,
-        starterProps.variant,
-        starterIvs,
+        starter.shiny,
+        starter.variant,
+        starter.ivs,
         starter.nature,
       );
-      starter.moveset && starterPokemon.tryPopulateMoveset(starter.moveset);
+      if (starter.moveset) {
+        starterPokemon.tryPopulateMoveset(starter.moveset);
+      }
       if (starter.passive) {
         starterPokemon.passive = true;
       }
       starterPokemon.luck = globalScene.gameData.getDexAttrLuck(
-        globalScene.gameData.dexData[starter.species.speciesId].caughtAttr,
+        globalScene.gameData.dexData[species.speciesId].caughtAttr,
       );
       if (starter.pokerus) {
         starterPokemon.pokerus = true;
@@ -88,25 +88,28 @@ export class SelectStarterPhase extends Phase {
         starterPokemon.nickname = starter.nickname;
       }
 
-      if (!isNullOrUndefined(starter.teraType)) {
-        starterPokemon.teraType = starter.teraType;
-      } else {
+      if (starter.teraType == null) {
         starterPokemon.teraType = starterPokemon.species.type1;
+      } else {
+        starterPokemon.teraType = starter.teraType;
       }
 
-      if (globalScene.gameMode.isSplicedOnly || Overrides.STARTER_FUSION_OVERRIDE) {
+      if (globalScene.gameMode.isSplicedOnly || activeOverrides.STARTER_FUSION_OVERRIDE) {
         starterPokemon.generateFusionSpecies(true);
       }
       starterPokemon.setVisible(false);
-      applyChallenges(ChallengeType.STARTER_MODIFY, starterPokemon);
+      const chalApplied = applyChallenges(ChallengeType.STARTER_MODIFY, starterPokemon);
       party.push(starterPokemon);
+      if (chalApplied) {
+        // If any challenges modified the starter, it should update
+        loadPokemonAssets.push(starterPokemon.updateInfo());
+      }
       loadPokemonAssets.push(starterPokemon.loadAssets());
     });
     overrideModifiers();
     overrideHeldItems(party[0]);
     Promise.all(loadPokemonAssets).then(() => {
-      SoundFade.fadeOut(globalScene, globalScene.sound.get("menu"), 500, true);
-      globalScene.time.delayedCall(500, () => globalScene.playBgm());
+      audioManager.playBgm(undefined, true);
       if (globalScene.gameMode.isClassic) {
         globalScene.gameData.gameStats.classicSessionsPlayed++;
       } else {

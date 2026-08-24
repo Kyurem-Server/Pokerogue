@@ -1,5 +1,5 @@
-import { randIntRange } from "#app/utils/common";
 import { StatusEffect } from "#enums/status-effect";
+import { randIntRange } from "#utils/common";
 import type { ParseKeys } from "i18next";
 import i18next from "i18next";
 
@@ -7,18 +7,24 @@ export class Status {
   public effect: StatusEffect;
   /** Toxic damage is `1/16 max HP * toxicTurnCount` */
   public toxicTurnCount = 0;
-  public sleepTurnsRemaining?: number;
+  public sleepTurnsRemaining?: number | undefined;
+  public freezeTurnsRemaining?: number | undefined;
 
-  constructor(effect: StatusEffect, toxicTurnCount = 0, sleepTurnsRemaining?: number) {
+  // TODO: Make this take an object?
+  constructor(effect: StatusEffect, toxicTurnCount = 0, sleepTurnsRemaining?: number, freezeTurnsRemaining?: number) {
     this.effect = effect;
     this.toxicTurnCount = toxicTurnCount;
     this.sleepTurnsRemaining = sleepTurnsRemaining;
+    this.freezeTurnsRemaining = freezeTurnsRemaining;
   }
 
   incrementTurn(): void {
     this.toxicTurnCount++;
     if (this.sleepTurnsRemaining) {
       this.sleepTurnsRemaining--;
+    }
+    if (this.freezeTurnsRemaining) {
+      this.freezeTurnsRemaining--;
     }
   }
 
@@ -59,12 +65,12 @@ export function getStatusEffectObtainText(
 
   if (!sourceText) {
     const i18nKey = `${getStatusEffectMessageKey(statusEffect)}.obtain` as ParseKeys;
-    return i18next.t(i18nKey, { pokemonNameWithAffix: pokemonNameWithAffix });
+    return i18next.t(i18nKey, { pokemonNameWithAffix });
   }
   const i18nKey = `${getStatusEffectMessageKey(statusEffect)}.obtainSource` as ParseKeys;
   return i18next.t(i18nKey, {
-    pokemonNameWithAffix: pokemonNameWithAffix,
-    sourceText: sourceText,
+    pokemonNameWithAffix,
+    sourceText,
   });
 }
 
@@ -73,7 +79,7 @@ export function getStatusEffectActivationText(statusEffect: StatusEffect, pokemo
     return "";
   }
   const i18nKey = `${getStatusEffectMessageKey(statusEffect)}.activation` as ParseKeys;
-  return i18next.t(i18nKey, { pokemonNameWithAffix: pokemonNameWithAffix });
+  return i18next.t(i18nKey, { pokemonNameWithAffix });
 }
 
 export function getStatusEffectOverlapText(statusEffect: StatusEffect, pokemonNameWithAffix: string): string {
@@ -81,7 +87,7 @@ export function getStatusEffectOverlapText(statusEffect: StatusEffect, pokemonNa
     return "";
   }
   const i18nKey = `${getStatusEffectMessageKey(statusEffect)}.overlap` as ParseKeys;
-  return i18next.t(i18nKey, { pokemonNameWithAffix: pokemonNameWithAffix });
+  return i18next.t(i18nKey, { pokemonNameWithAffix });
 }
 
 export function getStatusEffectHealText(statusEffect: StatusEffect, pokemonNameWithAffix: string): string {
@@ -89,15 +95,19 @@ export function getStatusEffectHealText(statusEffect: StatusEffect, pokemonNameW
     return "";
   }
   const i18nKey = `${getStatusEffectMessageKey(statusEffect)}.heal` as ParseKeys;
-  return i18next.t(i18nKey, { pokemonNameWithAffix: pokemonNameWithAffix });
+  return i18next.t(i18nKey, { pokemonNameWithAffix });
 }
 
+/**
+ * @returns The localized text for the given status effect's descriptor ("poisoning", "paralysis", etc).
+ */
+// TODO: Change parameter type to Exclude<StatusEffect, StatusEffect.NONE | StatusEffect.FAINT>
 export function getStatusEffectDescriptor(statusEffect: StatusEffect): string {
   if (statusEffect === StatusEffect.NONE) {
     return "";
   }
-  const i18nKey = `${getStatusEffectMessageKey(statusEffect)}.description` as ParseKeys;
-  return i18next.t(i18nKey);
+
+  return i18next.t(`${getStatusEffectMessageKey(statusEffect)}.description`);
 }
 
 export function getStatusEffectCatchRateMultiplier(statusEffect: StatusEffect): number {
@@ -135,7 +145,7 @@ export function getRandomStatusEffect(statusEffectA: StatusEffect, statusEffectB
     return statusEffectA;
   }
 
-  return randIntRange(0, 2) ? statusEffectA : statusEffectB;
+  return randIntRange(0, 1) ? statusEffectA : statusEffectB;
 }
 
 /**
@@ -151,14 +161,14 @@ export function getRandomStatus(statusA: Status | null, statusB: Status | null):
     return statusA;
   }
 
-  return randIntRange(0, 2) ? statusA : statusB;
+  return randIntRange(0, 1) ? statusA : statusB;
 }
 
 /**
  * Gets all non volatile status effects
  * @returns A list containing all non volatile status effects
  */
-export function getNonVolatileStatusEffects(): Array<StatusEffect> {
+export function getNonVolatileStatusEffects(): StatusEffect[] {
   return [
     StatusEffect.POISON,
     StatusEffect.TOXIC,

@@ -1,21 +1,21 @@
-import { getPokemonNameWithAffix } from "../messages";
-import type Pokemon from "../field/pokemon";
-import { HitResult } from "#enums/hit-result";
-import { getStatusEffectHealText } from "./status-effect";
-import { NumberHolder, toDmgValue, randSeedInt } from "#app/utils/common";
-import { applyAbAttrs } from "./abilities/apply-ab-attrs";
-import i18next from "i18next";
+import { applyAbAttrs } from "#abilities/apply-ab-attrs";
+import { globalScene } from "#app/global-scene";
+import { getPokemonNameWithAffix } from "#app/messages";
+import { getStatusEffectHealText } from "#data/status-effect";
 import { BattlerTagType } from "#enums/battler-tag-type";
 import { BerryType } from "#enums/berry-type";
-import { Stat, type BattleStat } from "#app/enums/stat";
-import { globalScene } from "#app/global-scene";
+import { HitResult } from "#enums/hit-result";
+import { type BattleStat, Stat } from "#enums/stat";
+import type { Pokemon } from "#field/pokemon";
+import { NumberHolder, randSeedInt, toDmgValue } from "#utils/common";
+import i18next from "i18next";
 
 export function getBerryName(berryType: BerryType): string {
-  return i18next.t(`berry:${BerryType[berryType]}.name`);
+  return i18next.t(`berry:${BerryType[berryType].toLowerCase()}.name`);
 }
 
 export function getBerryEffectDescription(berryType: BerryType): string {
-  return i18next.t(`berry:${BerryType[berryType]}.effect`);
+  return i18next.t(`berry:${BerryType[berryType].toLowerCase()}.effect`);
 }
 
 export type BerryPredicate = (pokemon: Pokemon) => boolean;
@@ -28,7 +28,9 @@ export function getBerryPredicate(berryType: BerryType): BerryPredicate {
       return (pokemon: Pokemon) => !!pokemon.status || !!pokemon.getTag(BattlerTagType.CONFUSED);
     case BerryType.ENIGMA:
       return (pokemon: Pokemon) =>
-        !!pokemon.turnData.attacksReceived.filter(a => a.result === HitResult.SUPER_EFFECTIVE).length;
+        pokemon.turnData.attacksReceived.some(
+          a => a.result === HitResult.SUPER_EFFECTIVE || a.result === HitResult.EXTREMELY_EFFECTIVE,
+        );
     case BerryType.LIECHI:
     case BerryType.GANLON:
     case BerryType.PETAYA:
@@ -64,7 +66,7 @@ export function getBerryPredicate(berryType: BerryType): BerryPredicate {
 
 export type BerryEffectFunc = (consumer: Pokemon) => void;
 
-export function getBerryEffectFunc(berryType: BerryType): BerryEffectFunc {
+export function getBerryEffectFunc(berryType: BerryType, berryPhase = false): BerryEffectFunc {
   return (consumer: Pokemon) => {
     // Apply an effect pertaining to what berry we're using
     switch (berryType) {
@@ -106,13 +108,20 @@ export function getBerryEffectFunc(berryType: BerryType): BerryEffectFunc {
           const stat: BattleStat = berryType - BerryType.ENIGMA;
           const statStages = new NumberHolder(1);
           applyAbAttrs("DoubleBerryEffectAbAttr", { pokemon: consumer, effectValue: statStages });
-          globalScene.phaseManager.unshiftNew(
-            "StatStageChangePhase",
-            consumer.getBattlerIndex(),
-            true,
-            [stat],
-            statStages.value,
-          );
+          if (berryPhase) {
+            const queuedChange = consumer.queuedBerryStatChanges.find(c => c.stat === stat);
+            if (queuedChange == null) {
+              consumer.queuedBerryStatChanges.push({ stat, stages: statStages.value });
+            } else {
+              queuedChange.stages += statStages.value;
+            }
+          } else {
+            globalScene.phaseManager.unshiftNew("StatStageChangePhase", {
+              battlerIndex: consumer.getBattlerIndex(),
+              changes: [{ stat, stages: statStages.value }],
+              sourcePokemon: consumer,
+            });
+          }
         }
         break;
 
@@ -127,13 +136,20 @@ export function getBerryEffectFunc(berryType: BerryType): BerryEffectFunc {
           const randStat = randSeedInt(Stat.SPD, Stat.ATK);
           const stages = new NumberHolder(2);
           applyAbAttrs("DoubleBerryEffectAbAttr", { pokemon: consumer, effectValue: stages });
-          globalScene.phaseManager.unshiftNew(
-            "StatStageChangePhase",
-            consumer.getBattlerIndex(),
-            true,
-            [randStat],
-            stages.value,
-          );
+          if (berryPhase) {
+            const queuedChange = consumer.queuedBerryStatChanges.find(c => c.stat === randStat);
+            if (queuedChange == null) {
+              consumer.queuedBerryStatChanges.push({ stat: randStat, stages: stages.value });
+            } else {
+              queuedChange.stages += stages.value;
+            }
+          } else {
+            globalScene.phaseManager.unshiftNew("StatStageChangePhase", {
+              battlerIndex: consumer.getBattlerIndex(),
+              changes: [{ stat: randStat, stages: stages.value }],
+              sourcePokemon: consumer,
+            });
+          }
         }
         break;
 
@@ -141,8 +157,8 @@ export function getBerryEffectFunc(berryType: BerryType): BerryEffectFunc {
         {
           // Pick the first move completely out of PP, or else the first one that has any PP missing
           const ppRestoreMove =
-            consumer.getMoveset().find(m => m.ppUsed === m.getMovePp()) ??
-            consumer.getMoveset().find(m => m.ppUsed < m.getMovePp());
+            consumer.getMoveset().find(m => m.ppUsed === m.getMovePp())
+            ?? consumer.getMoveset().find(m => m.ppUsed < m.getMovePp());
           if (ppRestoreMove) {
             ppRestoreMove.ppUsed = Math.max(ppRestoreMove.ppUsed - 10, 0);
             globalScene.phaseManager.queueMessage(

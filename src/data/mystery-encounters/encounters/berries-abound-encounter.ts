@@ -1,43 +1,45 @@
-import { MysteryEncounterOptionBuilder } from "#app/data/mystery-encounters/mystery-encounter-option";
-import type { EnemyPartyConfig } from "#app/data/mystery-encounters/utils/encounter-phase-utils";
+import { CLASSIC_MODE_MYSTERY_ENCOUNTER_WAVES } from "#app/constants";
+import { audioManager } from "#app/global-audio-manager";
+import { globalScene } from "#app/global-scene";
+import { getPokemonNameWithAffix } from "#app/messages";
+import { modifierTypes } from "#data/data-lists";
+import { BattlerTagType } from "#enums/battler-tag-type";
+import { BerryType } from "#enums/berry-type";
+import { ModifierPoolType } from "#enums/modifier-pool-type";
+import { MysteryEncounterOptionMode } from "#enums/mystery-encounter-option-mode";
+import { MysteryEncounterTier } from "#enums/mystery-encounter-tier";
+import { MysteryEncounterType } from "#enums/mystery-encounter-type";
+import { PERMANENT_STATS, Stat } from "#enums/stat";
+import type { PlayerPokemon, Pokemon } from "#field/pokemon";
+import { BerryModifier } from "#modifiers/modifier";
+import type { BerryModifierType, ModifierTypeOption } from "#modifiers/modifier-type";
+import { regenerateModifierPoolThresholds } from "#modifiers/modifier-type";
+import { queueEncounterMessage, showEncounterText } from "#mystery-encounters/encounter-dialogue-utils";
+import type { EnemyPartyConfig } from "#mystery-encounters/encounter-phase-utils";
 import {
   generateModifierType,
   generateModifierTypeOption,
-  getRandomEncounterSpecies,
+  getRandomEncounterPokemon,
   initBattleWithEnemyConfig,
   leaveEncounterWithoutBattle,
   setEncounterExp,
   setEncounterRewards,
-} from "#app/data/mystery-encounters/utils/encounter-phase-utils";
-import type { PlayerPokemon } from "#app/field/pokemon";
-import type Pokemon from "#app/field/pokemon";
-import type { BerryModifierType, ModifierTypeOption } from "#app/modifier/modifier-type";
-import { regenerateModifierPoolThresholds } from "#app/modifier/modifier-type";
-import { modifierTypes } from "#app/data/data-lists";
-import { ModifierPoolType } from "#enums/modifier-pool-type";
-import { randSeedInt } from "#app/utils/common";
-import { BattlerTagType } from "#enums/battler-tag-type";
-import { MysteryEncounterType } from "#enums/mystery-encounter-type";
-import { globalScene } from "#app/global-scene";
-import type MysteryEncounter from "#app/data/mystery-encounters/mystery-encounter";
-import { MysteryEncounterBuilder } from "#app/data/mystery-encounters/mystery-encounter";
-import { queueEncounterMessage, showEncounterText } from "#app/data/mystery-encounters/utils/encounter-dialogue-utils";
-import { getPokemonNameWithAffix } from "#app/messages";
-import { MysteryEncounterTier } from "#enums/mystery-encounter-tier";
-import { MysteryEncounterOptionMode } from "#enums/mystery-encounter-option-mode";
+} from "#mystery-encounters/encounter-phase-utils";
 import {
   applyModifierTypeToPlayerPokemon,
   getEncounterPokemonLevelForWave,
   getHighestStatPlayerPokemon,
   getSpriteKeysFromPokemon,
   STANDARD_ENCOUNTER_BOOSTED_LEVEL_MODIFIER,
-} from "#app/data/mystery-encounters/utils/encounter-pokemon-utils";
-import PokemonData from "#app/system/pokemon-data";
-import { BerryModifier } from "#app/modifier/modifier";
-import i18next from "#app/plugins/i18n";
-import { BerryType } from "#enums/berry-type";
-import { PERMANENT_STATS, Stat } from "#enums/stat";
-import { CLASSIC_MODE_MYSTERY_ENCOUNTER_WAVES } from "#app/constants";
+} from "#mystery-encounters/encounter-pokemon-utils";
+import type { MysteryEncounter } from "#mystery-encounters/mystery-encounter";
+import { MysteryEncounterBuilder } from "#mystery-encounters/mystery-encounter";
+import { MysteryEncounterOptionBuilder } from "#mystery-encounters/mystery-encounter-option";
+import { PokemonData } from "#system/pokemon-data";
+import { randSeedItem } from "#utils/common";
+import { getEnumValues } from "#utils/enums";
+import { groupStatChange } from "#utils/stat-change";
+import i18next from "i18next";
 
 /** the i18n namespace for the encounter */
 const namespace = "mysteryEncounters/berriesAbound";
@@ -66,12 +68,17 @@ export const BerriesAboundEncounter: MysteryEncounter = MysteryEncounterBuilder.
 
     // Calculate boss mon
     const level = getEncounterPokemonLevelForWave(STANDARD_ENCOUNTER_BOOSTED_LEVEL_MODIFIER);
-    const bossPokemon = getRandomEncounterSpecies(level, true);
+    const bossPokemon = getRandomEncounterPokemon({
+      level,
+      isBoss: true,
+      eventShinyRerolls: 2,
+      eventHiddenRerolls: 1,
+    });
     encounter.setDialogueToken("enemyPokemon", getPokemonNameWithAffix(bossPokemon));
     const config: EnemyPartyConfig = {
       pokemonConfigs: [
         {
-          level: level,
+          level,
           species: bossPokemon.species,
           dataSource: new PokemonData(bossPokemon),
           isBoss: true,
@@ -105,8 +112,8 @@ export const BerriesAboundEncounter: MysteryEncounter = MysteryEncounterBuilder.
         hasShadow: true,
       },
       {
-        spriteKey: spriteKey,
-        fileRoot: fileRoot,
+        spriteKey,
+        fileRoot,
         hasShadow: true,
         tint: 0.25,
         x: -5,
@@ -147,7 +154,7 @@ export const BerriesAboundEncounter: MysteryEncounter = MysteryEncounterBuilder.
       const doBerryRewards = () => {
         const berryText = i18next.t(`${namespace}:berries`);
 
-        globalScene.playSound("item_fanfare");
+        audioManager.playSound("se/item_fanfare");
         queueEncounterMessage(
           i18next.t("battle:rewardGainCount", {
             modifierName: berryText,
@@ -206,7 +213,7 @@ export const BerriesAboundEncounter: MysteryEncounter = MysteryEncounterBuilder.
           const doBerryRewards = () => {
             const berryText = i18next.t(`${namespace}:berries`);
 
-            globalScene.playSound("item_fanfare");
+            audioManager.playSound("se/item_fanfare");
             queueEncounterMessage(
               i18next.t("battle:rewardGainCount", {
                 modifierName: berryText,
@@ -237,14 +244,12 @@ export const BerriesAboundEncounter: MysteryEncounter = MysteryEncounterBuilder.
           const config = globalScene.currentBattle.mysteryEncounter!.enemyPartyConfigs[0];
           config.pokemonConfigs![0].tags = [BattlerTagType.MYSTERY_ENCOUNTER_POST_SUMMON];
           config.pokemonConfigs![0].mysteryEncounterBattleEffects = (pokemon: Pokemon) => {
-            queueEncounterMessage(`${namespace}:option.2.boss_enraged`);
-            globalScene.phaseManager.unshiftNew(
-              "StatStageChangePhase",
-              pokemon.getBattlerIndex(),
-              true,
-              statChangesForBattle,
-              1,
-            );
+            queueEncounterMessage(`${namespace}:option.2.bossEnraged`);
+            globalScene.phaseManager.unshiftNew("StatStageChangePhase", {
+              battlerIndex: pokemon.getBattlerIndex(),
+              changes: groupStatChange(statChangesForBattle, 1),
+              sourcePokemon: pokemon,
+            });
           };
           setEncounterRewards(
             {
@@ -254,7 +259,7 @@ export const BerriesAboundEncounter: MysteryEncounter = MysteryEncounterBuilder.
             undefined,
             doBerryRewards,
           );
-          await showEncounterText(`${namespace}:option.2.selected_bad`);
+          await showEncounterText(`${namespace}:option.2.selectedBad`);
           await initBattleWithEnemyConfig(config);
           return;
         }
@@ -264,7 +269,7 @@ export const BerriesAboundEncounter: MysteryEncounter = MysteryEncounterBuilder.
         const doFasterBerryRewards = () => {
           const berryText = i18next.t(`${namespace}:berries`);
 
-          globalScene.playSound("item_fanfare");
+          audioManager.playSound("se/item_fanfare");
           queueEncounterMessage(
             i18next.t("battle:rewardGainCount", {
               modifierName: berryText,
@@ -311,7 +316,7 @@ export const BerriesAboundEncounter: MysteryEncounter = MysteryEncounterBuilder.
   .build();
 
 function tryGiveBerry(prioritizedPokemon?: PlayerPokemon) {
-  const berryType = randSeedInt(Object.keys(BerryType).filter(s => !Number.isNaN(Number(s))).length) as BerryType;
+  const berryType = randSeedItem(getEnumValues(BerryType));
   const berry = generateModifierType(modifierTypes.BERRY, [berryType]) as BerryModifierType;
 
   const party = globalScene.getPlayerParty();
@@ -320,9 +325,9 @@ function tryGiveBerry(prioritizedPokemon?: PlayerPokemon) {
   if (prioritizedPokemon) {
     const heldBerriesOfType = globalScene.findModifier(
       m =>
-        m instanceof BerryModifier &&
-        m.pokemonId === prioritizedPokemon.id &&
-        (m as BerryModifier).berryType === berryType,
+        m instanceof BerryModifier
+        && m.pokemonId === prioritizedPokemon.id
+        && (m as BerryModifier).berryType === berryType,
       true,
     ) as BerryModifier;
 

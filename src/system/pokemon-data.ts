@@ -1,22 +1,22 @@
-import { BattleType } from "#enums/battle-type";
 import { globalScene } from "#app/global-scene";
-import type { Gender } from "../data/gender";
-import { Nature } from "#enums/nature";
-import { PokeballType } from "#enums/pokeball";
-import { getPokemonSpeciesForm } from "#app/data/pokemon-species";
-import { getPokemonSpecies } from "#app/utils/pokemon-utils";
-import { Status } from "../data/status-effect";
-import Pokemon, { EnemyPokemon } from "../field/pokemon";
-import { PokemonMove } from "#app/data/moves/pokemon-move";
-import { TrainerSlot } from "#enums/trainer-slot";
-import type { Variant } from "#app/sprites/variant";
+import { speciesDataRegistry } from "#app/global-species-data-registry";
+import type { Gender } from "#data/gender";
+import { CustomPokemonData, PokemonBattleData, PokemonSummonData } from "#data/pokemon-data";
+import { Status } from "#data/status-effect";
+import { BattleType } from "#enums/battle-type";
 import type { BiomeId } from "#enums/biome-id";
 import type { MoveId } from "#enums/move-id";
-import type { SpeciesId } from "#enums/species-id";
-import { CustomPokemonData, PokemonBattleData, PokemonSummonData } from "#app/data/pokemon/pokemon-data";
+import { Nature } from "#enums/nature";
+import { PokeballType } from "#enums/pokeball";
 import type { PokemonType } from "#enums/pokemon-type";
+import type { SpeciesId } from "#enums/species-id";
+import { TrainerSlot } from "#enums/trainer-slot";
+import { EnemyPokemon, Pokemon } from "#field/pokemon";
+import { PokemonMove } from "#moves/pokemon-move";
+import type { Variant } from "#sprites/variant";
+import { getPokemonSpeciesForm } from "#utils/pokemon-utils";
 
-export default class PokemonData {
+export class PokemonData {
   public id: number;
   public player: boolean;
   public species: SpeciesId;
@@ -70,30 +70,28 @@ export default class PokemonData {
   public customPokemonData: CustomPokemonData;
   public fusionCustomPokemonData: CustomPokemonData;
 
-  // Deprecated attributes, needed for now to allow SessionData migration (see PR#4619 comments)
-  // TODO: Remove these once pre-session migration is implemented
-  public natureOverride: Nature | -1;
-  public mysteryEncounterPokemonData: CustomPokemonData | null;
-  public fusionMysteryEncounterPokemonData: CustomPokemonData | null;
-
   /**
    * Construct a new {@linkcode PokemonData} instance out of a {@linkcode Pokemon}
    * or JSON representation thereof.
    * @param source The {@linkcode Pokemon} to convert into data (or a JSON object representing one)
    */
   // TODO: Remove any from type signature in favor of 2 separate method funcs
+  // TODO: change the source to `unknown` or create a method explicitly for converting from raw JSON data
   constructor(source: Pokemon | any) {
     const sourcePokemon = source instanceof Pokemon ? source : undefined;
 
     this.id = source.id;
     this.player = sourcePokemon?.isPlayer() ?? source.player;
     this.species = sourcePokemon?.species.speciesId ?? source.species;
-    this.nickname = sourcePokemon?.summonData.illusion?.basePokemon.nickname ?? source.nickname;
-    this.formIndex = Math.max(Math.min(source.formIndex, getPokemonSpecies(this.species).forms.length - 1), 0);
+    this.nickname = source.nickname;
+    this.formIndex = Math.max(
+      Math.min(source.formIndex, speciesDataRegistry.getSpecies(this.species).forms.length - 1),
+      0,
+    );
     this.abilityIndex = source.abilityIndex;
     this.passive = source.passive;
-    this.shiny = sourcePokemon?.summonData.illusion?.basePokemon.shiny ?? source.shiny;
-    this.variant = sourcePokemon?.summonData.illusion?.basePokemon.variant ?? source.variant;
+    this.shiny = source.shiny;
+    this.variant = source.variant;
     this.pokeball = source.pokeball ?? PokeballType.POKEBALL;
     this.level = source.level;
     this.exp = source.exp;
@@ -105,11 +103,16 @@ export default class PokemonData {
 
     // TODO: Can't we move some of this verification stuff to an upgrade script?
     this.nature = source.nature ?? Nature.HARDY;
-    this.moveset = source.moveset.map((m: any) => PokemonMove.loadMove(m));
+    this.moveset = source.moveset?.map((m: any) => PokemonMove.loadMove(m)) ?? [];
     this.status = source.status
-      ? new Status(source.status.effect, source.status.toxicTurnCount, source.status.sleepTurnsRemaining)
+      ? new Status(
+          source.status.effect,
+          source.status.toxicTurnCount,
+          source.status.sleepTurnsRemaining,
+          source.status.freezeTurnsRemaining,
+        )
       : null;
-    this.friendship = source.friendship ?? getPokemonSpecies(this.species).baseFriendship;
+    this.friendship = source.friendship ?? speciesDataRegistry.getSpecies(this.species).baseFriendship;
     this.metLevel = source.metLevel || 5;
     this.metBiome = source.metBiome ?? -1;
     this.metSpecies = source.metSpecies;
@@ -122,20 +125,11 @@ export default class PokemonData {
     this.isTerastallized = !!source.isTerastallized;
     this.stellarTypesBoosted = source.stellarTypesBoosted ?? [];
 
-    // Deprecated, but needed for session data migration
-    this.natureOverride = source.natureOverride;
-    this.mysteryEncounterPokemonData = source.mysteryEncounterPokemonData
-      ? new CustomPokemonData(source.mysteryEncounterPokemonData)
-      : null;
-    this.fusionMysteryEncounterPokemonData = source.fusionMysteryEncounterPokemonData
-      ? new CustomPokemonData(source.fusionMysteryEncounterPokemonData)
-      : null;
-
     this.fusionSpecies = sourcePokemon?.fusionSpecies?.speciesId ?? source.fusionSpecies;
     this.fusionFormIndex = source.fusionFormIndex;
     this.fusionAbilityIndex = source.fusionAbilityIndex;
-    this.fusionShiny = sourcePokemon?.summonData.illusion?.basePokemon.fusionShiny ?? source.fusionShiny;
-    this.fusionVariant = sourcePokemon?.summonData.illusion?.basePokemon.fusionVariant ?? source.fusionVariant;
+    this.fusionShiny = source.fusionShiny;
+    this.fusionVariant = source.fusionVariant;
     this.fusionGender = source.fusionGender;
     this.fusionLuck = source.fusionLuck ?? (source.fusionShiny ? source.fusionVariant + 1 : 0);
     this.fusionTeraType = (source.fusionTeraType ?? 0) as PokemonType;
@@ -153,7 +147,7 @@ export default class PokemonData {
   }
 
   toPokemon(battleType?: BattleType, partyMemberIndex = 0, double = false): Pokemon {
-    const species = getPokemonSpecies(this.species);
+    const species = speciesDataRegistry.getSpecies(this.species);
     const ret: Pokemon = this.player
       ? globalScene.addPlayerPokemon(
           species,

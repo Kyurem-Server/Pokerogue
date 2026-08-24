@@ -1,34 +1,35 @@
-import type { EnemyPartyConfig } from "#app/data/mystery-encounters/utils/encounter-phase-utils";
-import {
-  initBattleWithEnemyConfig,
-  loadCustomMovesForEncounter,
-  leaveEncounterWithoutBattle,
-  setEncounterRewards,
-  transitionMysteryEncounterIntroVisuals,
-  generateModifierType,
-} from "#app/data/mystery-encounters/utils/encounter-phase-utils";
-import type { PokemonHeldItemModifierType } from "#app/modifier/modifier-type";
-import { modifierTypes } from "#app/data/data-lists";
-import { MysteryEncounterType } from "#enums/mystery-encounter-type";
+import { CLASSIC_MODE_MYSTERY_ENCOUNTER_WAVES } from "#app/constants";
 import { globalScene } from "#app/global-scene";
-import type MysteryEncounter from "#app/data/mystery-encounters/mystery-encounter";
-import { MysteryEncounterBuilder } from "#app/data/mystery-encounters/mystery-encounter";
-import { getPokemonSpecies } from "#app/utils/pokemon-utils";
-import { SpeciesId } from "#enums/species-id";
-import { Nature } from "#enums/nature";
-import type Pokemon from "#app/field/pokemon";
-import { PokemonMove } from "#app/data/moves/pokemon-move";
-import { queueEncounterMessage, showEncounterText } from "#app/data/mystery-encounters/utils/encounter-dialogue-utils";
-import { modifyPlayerPokemonBST } from "#app/data/mystery-encounters/utils/encounter-pokemon-utils";
-import { MoveId } from "#enums/move-id";
+import { speciesDataRegistry } from "#app/global-species-data-registry";
+import { modifierTypes } from "#data/data-lists";
+import { CustomPokemonData } from "#data/pokemon-data";
 import { BattlerIndex } from "#enums/battler-index";
 import { BattlerTagType } from "#enums/battler-tag-type";
 import { BerryType } from "#enums/berry-type";
-import { MysteryEncounterTier } from "#enums/mystery-encounter-tier";
-import { CustomPokemonData } from "#app/data/pokemon/pokemon-data";
-import { Stat } from "#enums/stat";
-import { CLASSIC_MODE_MYSTERY_ENCOUNTER_WAVES } from "#app/constants";
+import { MoveId } from "#enums/move-id";
 import { MoveUseMode } from "#enums/move-use-mode";
+import { MysteryEncounterTier } from "#enums/mystery-encounter-tier";
+import { MysteryEncounterType } from "#enums/mystery-encounter-type";
+import { Nature } from "#enums/nature";
+import { SpeciesId } from "#enums/species-id";
+import { Stat } from "#enums/stat";
+import type { Pokemon } from "#field/pokemon";
+import type { PokemonHeldItemModifierType } from "#modifiers/modifier-type";
+import { PokemonMove } from "#moves/pokemon-move";
+import { queueEncounterMessage, showEncounterText } from "#mystery-encounters/encounter-dialogue-utils";
+import type { EnemyPartyConfig } from "#mystery-encounters/encounter-phase-utils";
+import {
+  generateModifierType,
+  initBattleWithEnemyConfig,
+  leaveEncounterWithoutBattle,
+  loadCustomMovesForEncounter,
+  setEncounterRewards,
+  transitionMysteryEncounterIntroVisuals,
+} from "#mystery-encounters/encounter-phase-utils";
+import { modifyPlayerPokemonBST } from "#mystery-encounters/encounter-pokemon-utils";
+import type { MysteryEncounter } from "#mystery-encounters/mystery-encounter";
+import { MysteryEncounterBuilder } from "#mystery-encounters/mystery-encounter";
+import { groupStatChange } from "#utils/stat-change";
 
 /** the i18n namespace for the encounter */
 const namespace = "mysteryEncounters/theStrongStuff";
@@ -47,7 +48,7 @@ export const TheStrongStuffEncounter: MysteryEncounter = MysteryEncounterBuilder
 )
   .withEncounterTier(MysteryEncounterTier.COMMON)
   .withSceneWaveRangeRequirement(...CLASSIC_MODE_MYSTERY_ENCOUNTER_WAVES)
-  .withScenePartySizeRequirement(3, 6) // Must have at least 3 pokemon in party
+  .withScenePartySizeRequirement(3)
   .withMaxAllowedEncounters(1)
   .withHideWildIntroMessage(true)
   .withAutoHideIntroVisuals(false)
@@ -64,8 +65,9 @@ export const TheStrongStuffEncounter: MysteryEncounter = MysteryEncounterBuilder
       disableAnimation: true,
     },
     {
-      spriteKey: SpeciesId.SHUCKLE.toString(),
-      fileRoot: "pokemon",
+      species: SpeciesId.SHUCKLE,
+      spriteKey: "",
+      fileRoot: "",
       hasShadow: true,
       repeat: true,
       scale: 1.25,
@@ -73,7 +75,7 @@ export const TheStrongStuffEncounter: MysteryEncounter = MysteryEncounterBuilder
       y: 10,
       yShadow: 7,
     },
-  ]) // Set in onInit()
+  ])
   .withIntroDialogue([
     {
       text: `${namespace}:intro`,
@@ -88,7 +90,7 @@ export const TheStrongStuffEncounter: MysteryEncounter = MysteryEncounterBuilder
       disableSwitch: true,
       pokemonConfigs: [
         {
-          species: getPokemonSpecies(SpeciesId.SHUCKLE),
+          species: speciesDataRegistry.getSpecies(SpeciesId.SHUCKLE),
           isBoss: true,
           bossSegments: 5,
           shiny: false, // Shiny lock because shiny is rolled only if the battle option is picked
@@ -115,14 +117,12 @@ export const TheStrongStuffEncounter: MysteryEncounter = MysteryEncounterBuilder
           ],
           tags: [BattlerTagType.MYSTERY_ENCOUNTER_POST_SUMMON],
           mysteryEncounterBattleEffects: (pokemon: Pokemon) => {
-            queueEncounterMessage(`${namespace}:option.2.stat_boost`);
-            globalScene.phaseManager.unshiftNew(
-              "StatStageChangePhase",
-              pokemon.getBattlerIndex(),
-              true,
-              [Stat.DEF, Stat.SPDEF],
-              1,
-            );
+            queueEncounterMessage(`${namespace}:option.2.statBoost`);
+            globalScene.phaseManager.unshiftNew("StatStageChangePhase", {
+              battlerIndex: pokemon.getBattlerIndex(),
+              changes: groupStatChange([Stat.DEF, Stat.SPDEF], 1),
+              sourcePokemon: pokemon,
+            });
           },
         },
       ],
@@ -132,7 +132,7 @@ export const TheStrongStuffEncounter: MysteryEncounter = MysteryEncounterBuilder
 
     loadCustomMovesForEncounter([MoveId.GASTRO_ACID, MoveId.STEALTH_ROCK]);
 
-    encounter.setDialogueToken("shuckleName", getPokemonSpecies(SpeciesId.SHUCKLE).getName());
+    encounter.setDialogueToken("shuckleName", speciesDataRegistry.getSpecies(SpeciesId.SHUCKLE).getName());
 
     return true;
   })
@@ -181,7 +181,7 @@ export const TheStrongStuffEncounter: MysteryEncounter = MysteryEncounterBuilder
 
       encounter.setDialogueToken("reductionValue", HIGH_BST_REDUCTION_VALUE.toString());
       encounter.setDialogueToken("increaseValue", BST_INCREASE_VALUE.toString());
-      await showEncounterText(`${namespace}:option.1.selected_2`, null, undefined, true);
+      await showEncounterText(`${namespace}:option.1.selected2`, null, undefined, true);
 
       encounter.dialogue.outro = [
         {
